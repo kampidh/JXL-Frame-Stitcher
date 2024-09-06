@@ -1,0 +1,20 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+[Ii]ntermediate/
+[Bb]uild/
+[Dd]ebug/
+[Rr]elease/
+i/
+3rdparty/build/
+*.obj
+*.cso
+
+# Temporary OS files
+.DS_Store
+Thumbs.db
+
+*.user
+*.txt.user
+*.txt.*
+.clang-format

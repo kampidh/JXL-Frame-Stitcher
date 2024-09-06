@@ -1,7 +1,7 @@
 # JXL Frame Stitching
 ### Join multiple images into a single JPEG XL image as multilayered or animated, using libjxl's API.
 
-![Screnshot](jxlframess.png)
+![Screnshot](jxlframess-011.png)
 
 Written in C++ with Qt 6.5.3
 

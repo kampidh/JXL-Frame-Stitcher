@@ -135,14 +135,15 @@ static constexpr char basicUsage[] = {
 <li><b>Frame reference</b>: selects the reference frame for the blending to take place</li>
 <li><b>Frame anchor</b>: sets the top left (origin) position of current frame in relative to the first frame, can be negative (out of canvas)</li>
 <li><b>Blend mode</b>: selects libjxl blending mode</li>
+<li><b>Frame name</b>: sets the current frame name, this can be decoded as a layer name (eg. in Krita) when saved as a non-animated, multilayered JXL</li>
 </ul>
 <p><b>Global Setting</b></p>
 <ul>
 <li><b>Animated</b>: if unchecked, encoding result will be multilayer JXL with first frame become the bottom layer and last frame become the topmost layer.</li>
 <li><b>Numerator/Denominator</b>: frames/second(s), for example 12 FPS will be 12/1</li>
 <li><b>Loops</b>: number of loops, if set to 0 the result animated JXL will loop indefinitely</li>
-<li><b>Distance</b>: sets the output image quality, 0 = lossless</li>
-<li><b>Effort</b>: sets the libjxl encoding effort, range 1-11</li>
+<li><b>Distance</b>: sets the output image quality, 0 = lossless, range 0-25</li>
+<li><b>Effort</b>: sets the libjxl encoding effort, range 1-10</li>
 <li><b>Color space</b>: sets the output color space, "Inherit first image" will retain ICC profile of the first frame (if any) and convert subsequent frames to match the first,
 "RAW" will not convert any frames, but still tag them as sRGB for displaying (useful if frames have different profiles and will be reassigned at postprocessing)</li>
 <li><b>Bit depth</b>: sets the output bit depth per channel</li>

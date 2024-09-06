@@ -35,13 +35,14 @@
 namespace jxfrstch
 {
 struct InputFileData {
-    QString filename{};
     bool isRefFrame{false};
     uint16_t frameDuration{1};
     uint8_t frameReference{0};
     int16_t frameXPos{0};
     int16_t frameYPos{0};
     JxlBlendMode blendMode{JXL_BLEND_BLEND};
+    QString filename{};
+    QString frameName{};
 
     // lexical comparison
     bool operator<(const InputFileData &rhs) const
@@ -144,10 +145,12 @@ MainWindow::MainWindow(QWidget *parent)
 
     d->collator.setNumericMode(true);
     ui->treeWidget->setColumnWidth(0, 120);
+    ui->treeWidget->setColumnWidth(1, 40);
     ui->treeWidget->setColumnWidth(2, 40);
     ui->treeWidget->setColumnWidth(3, 40);
     ui->treeWidget->setColumnWidth(4, 48);
     ui->treeWidget->setColumnWidth(5, 48);
+    ui->treeWidget->setColumnWidth(6, 60);
     ui->progressBarSub->hide();
 
     connect(ui->clearFilesBtn, &QPushButton::clicked, this, [&]() {
@@ -243,6 +246,14 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(ui->actionAbout_Qt, &QAction::triggered, this, [&]() {
         QMessageBox::aboutQt(this, "About Qt");
+    });
+
+    connect(ui->actionEnable_effort_11, &QAction::triggered, this, [&](bool val) {
+        if (val) {
+            ui->effortSpn->setMaximum(11);
+        } else {
+            ui->effortSpn->setMaximum(10);
+        }
     });
 
     connect(ui->actionNew_project, &QAction::triggered, this, &MainWindow::resetApp);
@@ -351,6 +362,7 @@ void MainWindow::resetOrder()
         ifd.frameXPos = itm->data(4, 0).toInt();
         ifd.frameYPos = itm->data(5, 0).toInt();
         ifd.blendMode = jxfrstch::stringToBlendMode(itm->data(6, 0).toString());
+        ifd.frameName = itm->data(7, 0).toString();
         d->inputFileList.append(ifd);
     }
     std::sort(d->inputFileList.begin(),
@@ -368,6 +380,7 @@ void MainWindow::resetOrder()
         item->setData(4, 0, ifd.frameXPos);
         item->setData(5, 0, ifd.frameYPos);
         item->setData(6, 0, jxfrstch::blendModeToString(ifd.blendMode));
+        item->setData(7, 0, ifd.frameName);
         item->setBackground(0, {});
         item->setFlags(item->flags() & ~Qt::ItemIsDropEnabled);
         if (ifd.isRefFrame) {
@@ -432,6 +445,7 @@ void MainWindow::appendFilesFromList(const QStringList &lst) {
             item->setData(4, 0, ifd.frameXPos);
             item->setData(5, 0, ifd.frameYPos);
             item->setData(6, 0, jxfrstch::blendModeToString(ifd.blendMode));
+            item->setData(7, 0, ifd.frameName);
             item->setBackground(0, {});
             item->setFlags(item->flags() & ~Qt::ItemIsDropEnabled);
             if (ifd.isRefFrame) {
@@ -472,6 +486,7 @@ void MainWindow::selectingFrames()
         ui->frameXPosSpn->setValue(currentSelItem->data(4, 0).toInt());
         ui->frameYPosSpn->setValue(currentSelItem->data(5, 0).toInt());
         ui->blendModeCmb->setCurrentIndex(5);
+        ui->frameNameLine->setText("<unchanged>");
 
         ui->frameXPosSpn->setEnabled(true);
         ui->frameYPosSpn->setEnabled(true);
@@ -484,6 +499,7 @@ void MainWindow::selectingFrames()
         ui->frameRefSpinBox->setValue(currentSelItem->data(3, 0).toInt());
         ui->frameXPosSpn->setValue(currentSelItem->data(4, 0).toInt());
         ui->frameYPosSpn->setValue(currentSelItem->data(5, 0).toInt());
+        ui->frameNameLine->setText(currentSelItem->data(7, 0).toString());
         if (ui->saveAsRefFrameChk->isChecked()) {
             ui->frameDurationSpn->setEnabled(false);
             ui->frameRefSpinBox->setEnabled(false);
@@ -554,6 +570,7 @@ bool MainWindow::saveConfigAs(bool forceDialog)
         jsobj["frameXPos"] = itm->data(4, 0).toInt();
         jsobj["frameYPos"] = itm->data(5, 0).toInt();
         jsobj["blend"] = jxfrstch::stringToBlendMode(itm->data(6, 0).toString());
+        jsobj["frameName"] = itm->data(7, 0).toString();
         files.append(jsobj);
     }
 
@@ -700,6 +717,7 @@ void MainWindow::openConfig(const QString &tmpfn)
                 const bool tmpIsRef = ff.value("isRef").toBool(false);
                 const int tmpFrameX = ff.value("frameXPos").toInt(0);
                 const int tmpFrameY = ff.value("frameYPos").toInt(0);
+                const QString tmpFrameName = ff.value("frameName").toString();
 
                 if (!tmpFile.isEmpty()) {
 
@@ -711,6 +729,7 @@ void MainWindow::openConfig(const QString &tmpfn)
                     ifd.isRefFrame = tmpIsRef;
                     ifd.frameXPos = tmpFrameX;
                     ifd.frameYPos = tmpFrameY;
+                    ifd.frameName = tmpFrameName;
 
                     QTreeWidgetItem *item = new QTreeWidgetItem(ui->treeWidget);
                     item->setData(0, 0, ifd.filename);
@@ -720,6 +739,7 @@ void MainWindow::openConfig(const QString &tmpfn)
                     item->setData(4, 0, ifd.frameXPos);
                     item->setData(5, 0, ifd.frameYPos);
                     item->setData(6, 0, jxfrstch::blendModeToString(ifd.blendMode));
+                    item->setData(7, 0, ifd.frameName);
                     item->setBackground(0, {});
                     item->setFlags(item->flags() & ~Qt::ItemIsDropEnabled);
                     if (ifd.isRefFrame) {
@@ -750,6 +770,7 @@ void MainWindow::currentFrameSettingChanged()
     const bool changeFrameDur = (ui->frameDurationSpn->value() != -1);
     const bool changeFrameRef = (ui->frameRefSpinBox->value() != -1);
     const bool changeFrameBlend = (ui->blendModeCmb->currentIndex() != 5);
+    const bool changeFrameName = (ui->frameNameLine->text() != "<unchanged>");
 
     if (isRefCheck) {
         for (int i = 0; i < ui->treeWidget->topLevelItemCount(); i++) {
@@ -774,6 +795,9 @@ void MainWindow::currentFrameSettingChanged()
         } else {
             v->setData(4, 0, 0);
             v->setData(5, 0, 0);
+        }
+        if (changeFrameName) {
+            v->setData(7, 0, ui->frameNameLine->text());
         }
         if (changeFrameBlend) {
             JxlBlendMode bld;
@@ -1136,6 +1160,7 @@ void MainWindow::doEncode()
             ind.frameXPos = itm->data(4, 0).toInt();
             ind.frameYPos = itm->data(5, 0).toInt();
             ind.blendMode = jxfrstch::stringToBlendMode(itm->data(6, 0).toString());
+            ind.frameName = itm->data(7, 0).toString();
 
             ui->treeWidget->setCurrentItem(itm);
             itm->setBackground(0, QColor(255, 255, 96));
@@ -1291,6 +1316,18 @@ void MainWindow::doEncode()
 
                 if (JxlEncoderSetFrameHeader(frameSettings, frameHeader.get()) != JXL_ENC_SUCCESS) {
                     throw QString("JxlEncoderSetFrameHeader failed");
+                }
+
+                if (!ind.frameName.isEmpty() && ind.frameName.toUtf8().size() <= 1071) {
+                    if (JxlEncoderSetFrameName(frameSettings, ind.frameName.toUtf8()) != JXL_ENC_SUCCESS) {
+                        throw QString("JxlEncoderSetFrameName failed");
+                    }
+                    // in case warning is needed
+                // } else if (ind.frameName.toUtf8().size() > 1071) {
+                //     QMessageBox::warning(this,
+                //                          "Warning",
+                //                          QString("Cannot write name for frame %1, name exceeds 1071 bytes limit!\n(Current: %2 bytes)")
+                //                              .arg(QString::number(i + 1), QString::number(ind.frameName.toUtf8().size())));
                 }
 
                 if (JxlEncoderAddImageFrame(frameSettings, &pixelFormat, imagerawdata.constData(), imagerawdata.size())

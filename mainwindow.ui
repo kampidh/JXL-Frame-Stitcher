@@ -6,13 +6,13 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>700</width>
+    <width>800</width>
     <height>640</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
-    <width>700</width>
+    <width>750</width>
     <height>640</height>
    </size>
   </property>
@@ -113,6 +113,11 @@
          <column>
           <property name="text">
            <string>Blend</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>Frame name</string>
           </property>
          </column>
         </widget>
@@ -268,7 +273,7 @@
               </item>
              </widget>
             </item>
-            <item row="5" column="1">
+            <item row="6" column="1">
              <widget class="QPushButton" name="applyFrameBtn">
               <property name="text">
                <string>Apply</string>
@@ -325,6 +330,23 @@
              <widget class="QLabel" name="label_14">
               <property name="text">
                <string>Frame anchor:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="5" column="1">
+             <widget class="QLineEdit" name="frameNameLine">
+              <property name="maxLength">
+               <number>1071</number>
+              </property>
+              <property name="clearButtonEnabled">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item row="5" column="0">
+             <widget class="QLabel" name="label_15">
+              <property name="text">
+               <string>Frame name:</string>
               </property>
              </widget>
             </item>
@@ -441,7 +463,7 @@
               <number>1</number>
              </property>
              <property name="maximum">
-              <number>11</number>
+              <number>10</number>
              </property>
             </widget>
            </item>
@@ -628,7 +650,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>700</width>
+     <width>800</width>
      <height>21</height>
     </rect>
    </property>
@@ -653,6 +675,8 @@
     <addaction name="separator"/>
     <addaction name="actionAbout"/>
     <addaction name="actionAbout_Qt"/>
+    <addaction name="separator"/>
+    <addaction name="actionEnable_effort_11"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuAbout"/>
@@ -707,6 +731,17 @@
   <action name="actionExit">
    <property name="text">
     <string>Exit</string>
+   </property>
+  </action>
+  <action name="actionEnable_effort_11">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Enable effort 11</string>
    </property>
   </action>
  </widget>

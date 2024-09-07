@@ -541,6 +541,13 @@
           </layout>
          </item>
          <item>
+          <widget class="QCheckBox" name="modularLossyChk">
+           <property name="text">
+            <string>Modular lossy</string>
+           </property>
+          </widget>
+         </item>
+         <item>
           <widget class="QCheckBox" name="alphaEnableChk">
            <property name="text">
             <string>Alpha channel</string>

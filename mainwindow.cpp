@@ -865,6 +865,8 @@ void MainWindow::doEncode()
     const bool useAnimation = ui->isAnimatedBox->isChecked();
     const int selColorSpace = ui->colorSpaceCmb->currentIndex();
 
+    const bool useLossyModular = ui->modularLossyChk->isChecked();
+
     if (encEffort > 10) {
         const auto diag = QMessageBox::warning(this,
                                                "Caution",
@@ -1133,7 +1135,8 @@ void MainWindow::doEncode()
             }
 
             if (!setFrameLossless((encDistance > 0.0) ? false : true) || !setDistance(encDistance)
-                || !setSetting(JXL_ENC_FRAME_SETTING_EFFORT, encEffort)) {
+                || !setSetting(JXL_ENC_FRAME_SETTING_EFFORT, encEffort)
+                || !setSetting(JXL_ENC_FRAME_SETTING_MODULAR, (useLossyModular ? 1 : -1))) {
                 throw QString("JxlEncoderFrameSettings failed");
             }
         }

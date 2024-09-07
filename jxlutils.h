@@ -108,7 +108,7 @@ static constexpr char aboutData[] = {
 <br>Join multiple images together into a single, multilayered or animated JPEG XL image
 </p>
 <p>Kampidh 2024
-<br>Project github page: <a href="https://github.com/kampidh">https://github.com/kampidh</a></p>
+<br>Project github page: <a href="https://github.com/kampidh/JXL-Frame-Stitcher">https://github.com/kampidh/JXL-Frame-Stitcher</a></p>
 <p>3rd party libraries used:</p>
 <ul>
 <li>libjxl 0.10.3</li>

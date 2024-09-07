@@ -34,6 +34,11 @@ if(NOT Ninja_EXECUTABLE)
     message(FATAL_ERROR "Ninja required")
 endif()
 
+find_program(Git_EXECUTABLE git)
+if(NOT Git_EXECUTABLE)
+    message(FATAL_ERROR "Git required")
+endif()
+
 include (ExternalProject)
 
 message( STATUS "CMAKE_GENERATOR: ${CMAKE_GENERATOR}")
@@ -42,6 +47,8 @@ message("CMAKE BUILD TYPE: ${CMAKE_BUILD_TYPE}")
 
 set(GLOBAL_BUILD_TYPE ${CMAKE_BUILD_TYPE})
 set(GLOBAL_PROFILE ${GLOBAL_PROFILE} -DBUILD_TESTING=false)
+
+set(PATCH_COMMAND ${Git_EXECUTABLE} apply)
 
 add_subdirectory(ext_lcms2)
 add_subdirectory(ext_jpegxl)

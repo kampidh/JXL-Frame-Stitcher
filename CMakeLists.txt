@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(JXLFrameStitching VERSION 0.1 LANGUAGES CXX)
+project(JXLFrameStitching VERSION 0.1.2 LANGUAGES CXX)
 
 if (POLICY CMP0002)
     cmake_policy(SET CMP0002 NEW)
@@ -27,6 +27,7 @@ find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
 set(TOP_INST_DIR ${CMAKE_SOURCE_DIR}/i/${CMAKE_BUILD_TYPE})
 set(EXTPREFIX "${TOP_INST_DIR}")
 set(CMAKE_PREFIX_PATH "${EXTPREFIX}")
+set(CMAKE_INSTALL_PREFIX "${EXTPREFIX}")
 
 # find_package(LCMS2 2.13 REQUIRED)
 find_package(JPEGXL 0.7.0 REQUIRED)
@@ -41,11 +42,14 @@ set(PROJECT_SOURCES
 
 configure_file(jxfrstchconfig.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/jxfrstchconfig.h)
 
+set(app_icon_resource_windows "${CMAKE_CURRENT_SOURCE_DIR}/resources/jxlframesticthing.rc")
+
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(JXLFrameStitching
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
         jxlutils.h
+        ${app_icon_resource_windows}
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET JXLFrameStitching APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR

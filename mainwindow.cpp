@@ -1365,7 +1365,19 @@ void MainWindow::doEncode()
                 if (d->encodeAbort) {
                     JxlEncoderCloseInput(enc.get());
                     JxlEncoderFlushInput(enc.get());
-                    throw QString("Encode aborted!");
+                    const double finalAbortImageSizeKiB = [&]() {
+#ifdef USE_STREAMING_OUTPUT
+                        return static_cast<double>(outProcessor.finalized_position) / 1024.0;
+#else
+                        return 0.0;
+#endif
+                    }();
+#ifdef USE_STREAMING_OUTPUT
+                    itm->setBackground(0, QColor(128, 255, 255));
+                    throw QString("Encode aborted! Outputting partial image | Final output file size: %1 KiB").arg(QString::number(finalAbortImageSizeKiB));
+#else
+                    throw QString("Encode aborted!"));
+#endif
                 }
                 QGuiApplication::processEvents();
 

@@ -20,6 +20,7 @@ public:
     bool jxlHasAnim{false};
     bool isLast{false};
     bool readingSet{false};
+    bool oneShotDecode{false};
     double frameDurationMs{0.0};
     int rootWidth{0};
     int rootHeight{0};
@@ -29,6 +30,8 @@ public:
     QRect currentRect{};
     QString errStr{};
     QString inputFileName{};
+    QString inputFileSuffix{};
+    QStringList oneShotSuffixes{};
 
     jxfrstch::EncodeParams params{};
 
@@ -51,7 +54,15 @@ JXLDecoderObject::JXLDecoderObject(const QString &inputFilename)
 {
     d->inputFileName = inputFilename;
     const QFileInfo fi(d->inputFileName);
-    if (fi.suffix().toLower() == "jxl") {
+    d->inputFileSuffix = fi.suffix().toLower();
+
+    // some files can trigger infinite loop when calling canRead()...
+    d->oneShotSuffixes = QStringList{
+        "tif",
+        "tiff"
+    };
+
+    if (d->inputFileSuffix == "jxl") {
         d->jxlFile.setFileName(inputFilename);
         d->isJxl = true;
         d->dec = JxlDecoderMake(nullptr);
@@ -299,6 +310,9 @@ bool JXLDecoderObject::haveAnimation()
 bool JXLDecoderObject::canRead()
 {
     if (!d->isJxl) {
+        if (d->oneShotDecode) {
+            return false;
+        }
         return d->reader.canRead();
     } else if (d->isJxl) {
         if (!d->isDecodeable) {
@@ -312,6 +326,9 @@ bool JXLDecoderObject::canRead()
 QImage JXLDecoderObject::read()
 {
     if (!d->isJxl) {
+        if (d->oneShotSuffixes.contains(d->inputFileSuffix)) {
+            d->oneShotDecode = true;
+        }
         return d->reader.read();
     } else if (d->isJxl) {
         // read full image and frame one by one
@@ -383,7 +400,12 @@ QImage JXLDecoderObject::read()
             }
         }
 
-        QImage buff(d->rootSize, QImage::Format_RGBA8888);
+        d->currentRect = QRect(static_cast<int>(d->m_header.layer_info.crop_x0),
+                               static_cast<int>(d->m_header.layer_info.crop_y0),
+                               static_cast<int>(d->m_header.layer_info.xsize),
+                               static_cast<int>(d->m_header.layer_info.ysize));
+
+        QImage buff(d->currentRect.width(), d->currentRect.height(), QImage::Format_RGBA8888);
         switch (d->params.bitDepth) {
         case ENC_BIT_8:
             buff.convertTo(QImage::Format_RGBA8888);

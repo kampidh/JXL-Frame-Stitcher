@@ -28,8 +28,50 @@
 
 #include "jxfrstchconfig.h"
 #include "jxlutils.h"
+#include "utils/jxlencoderobject.h"
 
 #define USE_STREAMING_OUTPUT // need libjxl >= 0.10.0
+
+namespace jxfrstch {
+QString blendModeToString(JxlBlendMode blendMode) {
+    switch (blendMode) {
+    case JXL_BLEND_ADD:
+        return QString("ADD");
+        break;
+    case JXL_BLEND_MULADD:
+        return QString("MULADD");
+        break;
+    case JXL_BLEND_MUL:
+        return QString("MUL");
+        break;
+    case JXL_BLEND_REPLACE:
+        return QString("REPLACE");
+        break;
+    case JXL_BLEND_BLEND:
+        return QString("BLEND");
+        break;
+    default:
+        return QString();
+        break;
+    }
+}
+
+JxlBlendMode stringToBlendMode(const QString &st) {
+    if (st == "ADD") {
+        return JXL_BLEND_ADD;
+    } else if (st == "MULADD") {
+        return JXL_BLEND_MULADD;
+    } else if (st == "MUL") {
+        return JXL_BLEND_MUL;
+    } else if (st == "REPLACE") {
+        return JXL_BLEND_REPLACE;
+    } else if (st == "BLEND") {
+        return JXL_BLEND_BLEND;
+    } else {
+        return JXL_BLEND_BLEND;
+    }
+}
+}
 
 class Q_DECL_HIDDEN MainWindow::Private
 {
@@ -41,6 +83,7 @@ public:
     QString configSaveFile{};
     QCollator collator;
     QVector<jxfrstch::InputFileData> inputFileList;
+    QScopedPointer<JXLEncoderObject> encObj;
 };
 
 MainWindow::MainWindow(QWidget *parent)
@@ -130,16 +173,17 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->resetOrderBtn, &QPushButton::clicked, this, &MainWindow::resetOrder);
 
     connect(ui->encodeBtn, &QPushButton::clicked, this, [&]() {
-        if (!d->isEncoding) {
+        if (d->encObj->isRunning() && !d->encodeAbort) {
+            ui->statusBar->showMessage("Aborting encode, please wait until current frame is finished...");
+            ui->encodeBtn->setText("Aborting...");
+            d->encObj->abortEncode(true);
+            d->encodeAbort = true;
+        } else if (!d->encObj->isRunning()) {
+            d->encodeAbort = false;
             if (ui->treeWidget->topLevelItemCount() > 0) {
                 ui->encodeBtn->setText("Abort");
-                d->isEncoding = true;
-                d->encodeAbort = false;
                 doEncode();
             }
-        } else {
-            ui->encodeBtn->setText("Aborting...");
-            d->encodeAbort = true;
         }
     });
 
@@ -174,6 +218,42 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->actionNew_project, &QAction::triggered, this, &MainWindow::resetApp);
     connect(ui->actionOpen_settings, &QAction::triggered, this, [&]() {
         openConfig();
+    });
+
+    d->encObj.reset(new JXLEncoderObject());
+
+    connect(d->encObj.get(), &JXLEncoderObject::sigStatusText, this, [&](const QString &status) {
+        ui->statusBar->showMessage(status);
+        QGuiApplication::processEvents();
+    });
+    connect(d->encObj.get(), &JXLEncoderObject::sigThrowError, this, [&](const QString &status) {
+        QMessageBox::critical(this, "Error", status);
+    });
+    connect(d->encObj.get(), &JXLEncoderObject::sigCurrentMainProgressBar, this, [&](const int &progress, const bool &success) {
+        QTreeWidgetItem *selItem = ui->treeWidget->topLevelItem(success ? progress - 1 : progress);
+        ui->progressBar->show();
+        ui->treeWidget->setCurrentItem(selItem);
+        selItem->setBackground(0, success ? QColor(128, 255, 255) : QColor(255, 255, 96));
+        ui->progressBar->setValue(progress);
+        QGuiApplication::processEvents();
+    });
+    connect(d->encObj.get(), &JXLEncoderObject::sigEnableSubProgressBar, this, [&](const bool &enabled, const int &setMax) {
+        ui->progressBarSub->setVisible(enabled);
+        ui->progressBarSub->setMaximum(setMax);
+        QGuiApplication::processEvents();
+    });
+    connect(d->encObj.get(), &JXLEncoderObject::sigCurrentSubProgressBar, this, [&](const int &progress) {
+        ui->progressBarSub->setValue(progress);
+        QGuiApplication::processEvents();
+    });
+    connect(d->encObj.get(), &JXLEncoderObject::finished, this, [&]() {
+        d->encObj->cleanupEncoder();
+        d->encObj->resetEncoder();
+        ui->encodeBtn->setText("Encode");
+        ui->menuBar->setEnabled(true);
+        ui->frameListGrp->setEnabled(true);
+        ui->globalSettingGrp->setEnabled(true);
+        setAcceptDrops(true);
     });
 }
 
@@ -768,19 +848,26 @@ void MainWindow::doEncode()
         return;
     }
 
-    const bool useAlpha = ui->alphaEnableChk->isChecked();
-    const bool usePremulAlpha = ui->alphaPremulChk->isChecked();
-    const bool useLosslessAlpha = ui->alphaLosslessChk->isChecked();
-    const int bitdepth = ui->bitDepthCmb->currentIndex();
-    const double encDistance = ui->distanceSpn->value();
     const int encEffort = ui->effortSpn->value();
     const int numerator = ui->numeratorSpn->value();
     const int denominator = ui->denominatorSpn->value();
-    const int numLoops = ui->loopsSpinBox->value();
-    const bool useAnimation = ui->isAnimatedBox->isChecked();
-    const int selColorSpace = ui->colorSpaceCmb->currentIndex();
 
-    const bool useLossyModular = ui->modularLossyChk->isChecked();
+    jxfrstch::EncodeParams params;
+
+    params.alpha = ui->alphaEnableChk->isChecked();
+    params.premulAlpha = ui->alphaPremulChk->isChecked();
+    params.losslessAlpha = ui->alphaLosslessChk->isChecked();
+    params.bitDepth = static_cast<EncodeBitDepth>(ui->bitDepthCmb->currentIndex());
+    params.distance = ui->distanceSpn->value();
+    params.effort = ui->effortSpn->value();
+    params.numerator = ui->numeratorSpn->value();
+    params.denominator = ui->denominatorSpn->value();
+    params.loops = ui->loopsSpinBox->value();
+    params.animation = ui->isAnimatedBox->isChecked();
+    params.colorSpace = static_cast<EncodeColorSpace>(ui->colorSpaceCmb->currentIndex());
+    params.lossyModular = ui->modularLossyChk->isChecked();
+    params.frameTimeMs = (static_cast<double>(denominator * 1000) / static_cast<double>(numerator));
+    params.outputFileName = ui->outFileLineEdit->text();
 
     if (encEffort > 10) {
         const auto diag = QMessageBox::warning(this,
@@ -799,10 +886,7 @@ void MainWindow::doEncode()
         }
     }
 
-    const QString outFileName = ui->outFileLineEdit->text();
-    const float frameTimeMs = (static_cast<float>(denominator * 1000) / static_cast<float>(numerator));
-
-    if (QFileInfo::exists(outFileName)) {
+    if (QFileInfo::exists(params.outputFileName)) {
         const auto diag = QMessageBox::warning(this,
                                                "Caution",
                                                "Output file already exists. Do you want to replace it?",
@@ -812,15 +896,6 @@ void MainWindow::doEncode()
             d->isEncoding = false;
             return;
         }
-    }
-
-    QImage firstLayer(ui->treeWidget->topLevelItem(0)->data(0, 0).toString());
-
-    if (firstLayer.isNull()) {
-        ui->statusBar->showMessage("Error: failed to load first image!");
-        ui->encodeBtn->setText("Encode");
-        d->isEncoding = false;
-        return;
     }
 
     ui->progressBar->show();
@@ -833,570 +908,46 @@ void MainWindow::doEncode()
     ui->globalSettingGrp->setEnabled(false);
     setAcceptDrops(false);
 
-    ui->statusBar->showMessage("Begin encoding...");
-    QGuiApplication::processEvents();
+    d->encObj->resetEncoder();
+    d->encObj->setEncodeParams(params);
 
-    const int width = firstLayer.width();
-    const int height = firstLayer.height();
-    const QRect bounds = firstLayer.rect();
+    const int framenum = ui->treeWidget->topLevelItemCount();
+    ui->progressBar->setMaximum(framenum);
 
-    const QByteArray firstLayerIcc = firstLayer.colorSpace().iccProfile();
-
-    auto enc = JxlEncoderMake(nullptr);
-    auto runner = JxlResizableParallelRunnerMake(nullptr);
-
-#ifdef USE_STREAMING_OUTPUT
-    jxfrstch::JxlOutputProcessor outProcessor;
-    if (!outProcessor.SetOutputPath(outFileName)) {
-        throw QString("Failed to create output file!");
+    for (int i = 0; i < framenum; i++) {
+        QTreeWidgetItem *itm = ui->treeWidget->topLevelItem(i);
+        itm->setBackground(0, {});
     }
-#endif
 
-    try {
-        if (JXL_ENC_SUCCESS != JxlEncoderSetParallelRunner(enc.get(), JxlResizableParallelRunner, runner.get())) {
-            throw QString("JxlEncoderSetParallelRunner failed");
-        }
+    for (int i = 0; i < framenum; i++) {
+        QTreeWidgetItem *itm = ui->treeWidget->topLevelItem(i);
+        jxfrstch::InputFileData ind;
+        ind.filename = itm->data(0, 0).toString();
+        ind.isRefFrame = itm->data(1, 0).toBool();
+        ind.frameDuration = itm->data(2, 0).toInt();
+        ind.frameReference = itm->data(3, 0).toInt();
+        ind.frameXPos = itm->data(4, 0).toInt();
+        ind.frameYPos = itm->data(5, 0).toInt();
+        ind.blendMode = jxfrstch::stringToBlendMode(itm->data(6, 0).toString());
+        ind.frameName = itm->data(7, 0).toString();
 
-        JxlResizableParallelRunnerSetThreads(
-            runner.get(),
-            JxlResizableParallelRunnerSuggestThreads(static_cast<uint64_t>(bounds.width()),
-                                                     static_cast<uint64_t>(bounds.height())));
-
-#ifdef USE_STREAMING_OUTPUT
-        if (JXL_ENC_SUCCESS != JxlEncoderSetOutputProcessor(enc.get(), outProcessor.GetOutputProcessor())) {
-            throw QString("JxlEncoderSetOutputProcessor failed");
-        }
-#endif
-        if (bitdepth > 3) {
-            throw QString("Error: unsupported bitdepth");
-        }
-
-        const JxlPixelFormat pixelFormat = [&]() {
-            JxlPixelFormat pixelFormat{};
-            switch (bitdepth) {
-            case 0:
-                pixelFormat.data_type = JXL_TYPE_UINT8;
-                break;
-            case 1:
-                pixelFormat.data_type = JXL_TYPE_UINT16;
-                break;
-            case 2:
-                pixelFormat.data_type = JXL_TYPE_FLOAT16;
-                break;
-            case 3:
-                pixelFormat.data_type = JXL_TYPE_FLOAT;
-                break;
-            default:
-                break;
-            }
-            pixelFormat.num_channels = useAlpha ? 4 : 3;
-            return pixelFormat;
-        }();
-
-        const auto basicInfo = [&]() {
-            auto info{std::make_unique<JxlBasicInfo>()};
-            JxlEncoderInitBasicInfo(info.get());
-            info->xsize = static_cast<uint32_t>(bounds.width());
-            info->ysize = static_cast<uint32_t>(bounds.height());
-            switch (pixelFormat.data_type) {
-            case JXL_TYPE_UINT8:
-                info->bits_per_sample = 8;
-                info->exponent_bits_per_sample = 0;
-                if (useAlpha) {
-                    info->alpha_bits = 8;
-                    info->alpha_exponent_bits = 0;
-                    info->alpha_premultiplied = usePremulAlpha ? JXL_TRUE : JXL_FALSE;
-                }
-                break;
-            case JXL_TYPE_UINT16:
-                info->bits_per_sample = 16;
-                info->exponent_bits_per_sample = 0;
-                if (useAlpha) {
-                    info->alpha_bits = 16;
-                    info->alpha_exponent_bits = 0;
-                    info->alpha_premultiplied = usePremulAlpha ? JXL_TRUE : JXL_FALSE;
-                }
-                break;
-            case JXL_TYPE_FLOAT16:
-                info->bits_per_sample = 16;
-                info->exponent_bits_per_sample = 5;
-                if (useAlpha) {
-                    info->alpha_bits = 16;
-                    info->alpha_exponent_bits = 5;
-                    info->alpha_premultiplied = usePremulAlpha ? JXL_TRUE : JXL_FALSE;
-                }
-                break;
-            case JXL_TYPE_FLOAT:
-                info->bits_per_sample = 32;
-                info->exponent_bits_per_sample = 8;
-                if (useAlpha) {
-                    info->alpha_bits = 32;
-                    info->alpha_exponent_bits = 8;
-                    info->alpha_premultiplied = usePremulAlpha ? JXL_TRUE : JXL_FALSE;
-                }
-                break;
-            default:
-                break;
-            }
-
-            info->num_color_channels = 3;
-            if (useAlpha) {
-                info->num_extra_channels = 1;
-            }
-
-            if (encDistance > 0.0) {
-                info->uses_original_profile = JXL_FALSE;
-            } else {
-                info->uses_original_profile = JXL_TRUE;
-            }
-            info->have_animation = useAnimation ? JXL_TRUE : JXL_FALSE;
-
-            if (useAnimation) {
-                info->animation.have_timecodes = JXL_FALSE;
-                info->animation.tps_numerator = static_cast<uint32_t>(numerator);
-                info->animation.tps_denominator = static_cast<uint32_t>(denominator);
-                info->animation.num_loops = static_cast<uint32_t>(numLoops);
-            }
-
-            return info;
-        }();
-
-        if (JXL_ENC_SUCCESS != JxlEncoderSetBasicInfo(enc.get(), basicInfo.get())) {
-            throw QString("JxlEncoderSetBasicInfo failed");
-        }
-
-        if (selColorSpace != 3 || (selColorSpace == 3 && firstLayerIcc.isEmpty())) {
-            JxlColorEncoding cicpDescription{};
-
-            switch (selColorSpace) {
-            case 0:
-                cicpDescription.transfer_function = JXL_TRANSFER_FUNCTION_SRGB;
-                cicpDescription.primaries = JXL_PRIMARIES_SRGB;
-                cicpDescription.white_point = JXL_WHITE_POINT_D65;
-                break;
-            case 1:
-                cicpDescription.transfer_function = JXL_TRANSFER_FUNCTION_LINEAR;
-                cicpDescription.primaries = JXL_PRIMARIES_SRGB;
-                cicpDescription.white_point = JXL_WHITE_POINT_D65;
-                break;
-            case 2:
-                cicpDescription.transfer_function = JXL_TRANSFER_FUNCTION_SRGB;
-                cicpDescription.primaries = JXL_PRIMARIES_P3;
-                cicpDescription.white_point = JXL_WHITE_POINT_D65;
-                break;
-            default:
-                cicpDescription.transfer_function = JXL_TRANSFER_FUNCTION_SRGB;
-                cicpDescription.primaries = JXL_PRIMARIES_SRGB;
-                cicpDescription.white_point = JXL_WHITE_POINT_D65;
-                break;
-            }
-
-            if (JXL_ENC_SUCCESS != JxlEncoderSetColorEncoding(enc.get(), &cicpDescription)) {
-                throw QString("JxlEncoderSetColorEncoding failed");
-            }
-        } else if (selColorSpace == 3 && !firstLayerIcc.isEmpty()) {
-            if (JXL_ENC_SUCCESS
-                != JxlEncoderSetICCProfile(enc.get(),
-                                           reinterpret_cast<const uint8_t *>(firstLayerIcc.constData()),
-                                           static_cast<size_t>(firstLayerIcc.size()))) {
-                throw QString("JxlEncoderSetICCProfile failed");
-            }
-        }
-
-        auto *frameSettings = JxlEncoderFrameSettingsCreate(enc.get(), nullptr);
-        {
-            const auto setFrameLossless = [&](bool v) {
-                if (JxlEncoderSetFrameLossless(frameSettings, v ? JXL_TRUE : JXL_FALSE) != JXL_ENC_SUCCESS) {
-                    qDebug() << "JxlEncoderSetFrameLossless failed";
-                    return false;
-                }
-                return true;
-            };
-
-            const auto setSetting = [&](JxlEncoderFrameSettingId id, int v) {
-                if (JxlEncoderFrameSettingsSetOption(frameSettings, id, v) != JXL_ENC_SUCCESS) {
-                    qDebug() << "JxlEncoderFrameSettingsSetOption failed";
-                    return false;
-                }
-                return true;
-            };
-
-            const auto setDistance = [&](double v) {
-                if (JxlEncoderSetFrameDistance(frameSettings, v) != JXL_ENC_SUCCESS) {
-                    qDebug() << "JxlEncoderSetFrameDistance failed";
-                    return false;
-                }
-                if (useAlpha) {
-                    const double alphadist = useLosslessAlpha ? 0.0 : v;
-                    if (JxlEncoderSetExtraChannelDistance(frameSettings, 0, alphadist) != JXL_ENC_SUCCESS) {
-                        qDebug() << "JxlEncoderSetExtraChannelDistance (alpha) failed";
-                        return false;
-                    }
-                }
-                return true;
-            };
-
-            [[maybe_unused]] const auto setSettingFloat = [&](JxlEncoderFrameSettingId id, float v) {
-                if (JxlEncoderFrameSettingsSetFloatOption(frameSettings, id, v) != JXL_ENC_SUCCESS) {
-                    qDebug() << "JxlEncoderFrameSettingsSetFloatOption failed";
-                    return false;
-                }
-                return true;
-            };
-
-            if (encEffort > 10) {
-                JxlEncoderAllowExpertOptions(enc.get());
-            }
-
-            if (!setFrameLossless((encDistance > 0.0) ? false : true) || !setDistance(encDistance)
-                || !setSetting(JXL_ENC_FRAME_SETTING_EFFORT, encEffort)
-                || !setSetting(JXL_ENC_FRAME_SETTING_MODULAR, (useLossyModular ? 1 : -1))) {
-                throw QString("JxlEncoderFrameSettings failed");
-            }
-        }
-
-        bool referenceSaved = false;
-        auto frameHeader = std::make_unique<JxlFrameHeader>();
-
-        // const int framenum = d->inputFileList.size();
-        const int framenum = ui->treeWidget->topLevelItemCount();
-        ui->progressBar->setMaximum(framenum);
-
-        for (int i = 0; i < framenum; i++) {
-            QTreeWidgetItem *itm = ui->treeWidget->topLevelItem(i);
-            itm->setBackground(0, {});
-        }
-
-        for (int i = 0; i < framenum; i++) {
-            QTreeWidgetItem *itm = ui->treeWidget->topLevelItem(i);
-            jxfrstch::InputFileData ind;
-            ind.filename = itm->data(0, 0).toString();
-            ind.isRefFrame = itm->data(1, 0).toBool();
-            ind.frameDuration = itm->data(2, 0).toInt();
-            ind.frameReference = itm->data(3, 0).toInt();
-            ind.frameXPos = itm->data(4, 0).toInt();
-            ind.frameYPos = itm->data(5, 0).toInt();
-            ind.blendMode = jxfrstch::stringToBlendMode(itm->data(6, 0).toString());
-            ind.frameName = itm->data(7, 0).toString();
-
-            ui->treeWidget->setCurrentItem(itm);
-            itm->setBackground(0, QColor(255, 255, 96));
-            QGuiApplication::processEvents();
-
-            QImageReader reader(ind.filename);
-
-            int imageframenum = 0;
-            const bool isImageAnim = reader.imageCount() > 1 && reader.supportsAnimation();
-            if (isImageAnim) {
-                ui->progressBarSub->setVisible(true);
-                ui->progressBarSub->setMinimum(0);
-                ui->progressBarSub->setMaximum(reader.imageCount());
-            }
-            while (reader.canRead()) {
-                int frameXPos = 0;
-                int frameYPos = 0;
-                if (i > 0) {
-                    frameXPos = ind.frameXPos;
-                    frameYPos = ind.frameYPos;
-                }
-
-                QByteArray imagerawdata;
-                bool needCrop = false;
-                QSize frameSize;
-                size_t frameResolution;
-                {
-                    QImage currentFrame(reader.read());
-
-                    if (currentFrame.isNull()) {
-                        throw reader.errorString();
-                        // throw QString("Encode failed: one of the image(s) failed to load!");
-                    }
-                    if ((currentFrame.width() != width || currentFrame.height() != height)
-                        || ((frameXPos != 0 || frameYPos != 0) && i > 0)) {
-                        needCrop = true;
-                        // throw QString("Encode failed: one of the image(s) have different dimensions!");
-                    }
-
-                    switch (bitdepth) {
-                    case 0: // u8bpc
-                        currentFrame.convertTo(useAlpha ? QImage::Format_RGBA8888 : QImage::Format_RGBX8888);
-                        break;
-                    case 1: // u16bpc
-                        currentFrame.convertTo(useAlpha ? QImage::Format_RGBA64 : QImage::Format_RGBX64);
-                        break;
-                    case 2: // f16bpc
-                        currentFrame.convertTo(useAlpha ? QImage::Format_RGBA16FPx4 : QImage::Format_RGBX16FPx4);
-                        break;
-                    case 3: // f32bpc
-                        currentFrame.convertTo(useAlpha ? QImage::Format_RGBA32FPx4 : QImage::Format_RGBX32FPx4);
-                        break;
-                    default:
-                        break;
-                    }
-
-                    if (selColorSpace != 4) {
-                        // treat untagged as sRGB
-                        if (!currentFrame.colorSpace().isValid()) {
-                            currentFrame.setColorSpace(QColorSpace::SRgb);
-                        }
-                        switch (selColorSpace) {
-                        case 0:
-                            currentFrame.convertToColorSpace(QColorSpace::SRgb);
-                            break;
-                        case 1:
-                            currentFrame.convertToColorSpace(QColorSpace::SRgbLinear);
-                            break;
-                        case 2:
-                            currentFrame.convertToColorSpace(QColorSpace::DisplayP3);
-                            break;
-                        case 3:
-                            if (!firstLayerIcc.isEmpty()) {
-                                currentFrame.convertToColorSpace(QColorSpace::fromIccProfile(firstLayerIcc));
-                            } else {
-                                currentFrame.convertToColorSpace(QColorSpace::SRgb);
-                            }
-                            break;
-                        default:
-                            break;
-                        }
-                    }
-
-                    frameSize = currentFrame.size();
-                    frameResolution = frameSize.width() * frameSize.height();
-                    const size_t byteSize = [&]() {
-                        switch (bitdepth) {
-                        case 0:
-                            return 1;
-                            break;
-                        case 1:
-                        case 2:
-                            return 2;
-                            break;
-                        case 3:
-                            return 4;
-                        default:
-                            return 1;
-                            break;
-                        }
-                    }();
-
-                    const size_t neededBytes = ((useAlpha) ? 4 : 3) * byteSize * frameResolution;
-                    imagerawdata.resize(neededBytes, 0x0);
-
-                    switch (bitdepth) {
-                    case 0:
-                        jxfrstch::QImageToBuffer<uint8_t>(currentFrame, imagerawdata, frameResolution, useAlpha);
-                        break;
-                    case 1:
-                        jxfrstch::QImageToBuffer<uint16_t>(currentFrame, imagerawdata, frameResolution, useAlpha);
-                        break;
-                    case 2:
-                        jxfrstch::QImageToBuffer<qfloat16>(currentFrame, imagerawdata, frameResolution, useAlpha);
-                        break;
-                    case 3:
-                        jxfrstch::QImageToBuffer<float>(currentFrame, imagerawdata, frameResolution, useAlpha);
-                        break;
-                    default:
-                        break;
-                    }
-                }
-
-                const uint16_t frameTick = [&]() {
-                    if (!isImageAnim || !reader.canRead()) { // can't read == end of animation or just a single frame
-                        return ind.frameDuration;
-                    } else {
-                        return static_cast<uint16_t>(
-                            qRound(qMax(static_cast<float>(reader.nextImageDelay()) / frameTimeMs, 1.0)));
-                    }
-                }();
-
-                JxlEncoderInitFrameHeader(frameHeader.get());
-                frameHeader->duration = (useAnimation) ? frameTick : 0;
-                if (ind.isRefFrame && !referenceSaved) {
-                    frameHeader->layer_info.save_as_reference = 1;
-                    referenceSaved = true;
-                }
-                frameHeader->layer_info.blend_info.blendmode = ind.blendMode;
-                if (useAlpha) {
-                    frameHeader->layer_info.blend_info.alpha = 0;
-                }
-                if (referenceSaved && !ind.isRefFrame) {
-                    frameHeader->layer_info.blend_info.source = ind.frameReference;
-                }
-                if (needCrop) {
-                    frameHeader->layer_info.have_crop = JXL_TRUE;
-                    frameHeader->layer_info.crop_x0 = static_cast<int32_t>(frameXPos);
-                    frameHeader->layer_info.crop_y0 = static_cast<int32_t>(frameYPos);
-                    frameHeader->layer_info.xsize = static_cast<uint32_t>(frameSize.width());
-                    frameHeader->layer_info.ysize = static_cast<uint32_t>(frameSize.height());
-                }
-
-                if (JxlEncoderSetFrameHeader(frameSettings, frameHeader.get()) != JXL_ENC_SUCCESS) {
-                    throw QString("JxlEncoderSetFrameHeader failed");
-                }
-
-                if (!ind.frameName.isEmpty() && ind.frameName.toUtf8().size() <= 1071) {
-                    if (JxlEncoderSetFrameName(frameSettings, ind.frameName.toUtf8()) != JXL_ENC_SUCCESS) {
-                        throw QString("JxlEncoderSetFrameName failed");
-                    }
-                    // in case warning is needed
-                // } else if (ind.frameName.toUtf8().size() > 1071) {
-                //     QMessageBox::warning(this,
-                //                          "Warning",
-                //                          QString("Cannot write name for frame %1, name exceeds 1071 bytes limit!\n(Current: %2 bytes)")
-                //                              .arg(QString::number(i + 1), QString::number(ind.frameName.toUtf8().size())));
-                }
-
-                if (JxlEncoderAddImageFrame(frameSettings, &pixelFormat, imagerawdata.constData(), imagerawdata.size())
-                    != JXL_ENC_SUCCESS) {
-                    throw QString("JxlEncoderAddImageFrame failed");
-                }
-
-                const double currentImageSizeKiB = [&]() {
-#ifdef USE_STREAMING_OUTPUT
-                    return static_cast<double>(outProcessor.finalized_position) / 1024.0;
-#else
-                    return 0.0;
-#endif
-                }();
-
-                if (isImageAnim) {
-                    ui->statusBar->showMessage(
-                        QString("Processing frame %1 of %2 (Subframe %3 of %4) | Output file size: %5 KiB")
-                            .arg(QString::number(i + 1),
-                                 QString::number(framenum),
-                                 QString::number(imageframenum + 1),
-                                 QString::number(reader.imageCount()),
-                                 QString::number(currentImageSizeKiB)));
-                    ui->progressBarSub->setValue(imageframenum + 1);
-                } else {
-                    ui->statusBar->showMessage(QString("Processing frame %1 of %2 | Output file size: %3 KiB")
-                                                   .arg(QString::number(i + 1),
-                                                        QString::number(framenum),
-                                                        QString::number(currentImageSizeKiB)));
-                }
-
-                if (d->encodeAbort) {
-                    JxlEncoderCloseInput(enc.get());
-                    JxlEncoderFlushInput(enc.get());
-                    const double finalAbortImageSizeKiB = [&]() {
-#ifdef USE_STREAMING_OUTPUT
-                        return static_cast<double>(outProcessor.finalized_position) / 1024.0;
-#else
-                        return 0.0;
-#endif
-                    }();
-#ifdef USE_STREAMING_OUTPUT
-                    itm->setBackground(0, QColor(128, 255, 255));
-                    throw QString("Encode aborted! Outputting partial image | Final output file size: %1 KiB").arg(QString::number(finalAbortImageSizeKiB));
-#else
-                    throw QString("Encode aborted!"));
-#endif
-                }
-                QGuiApplication::processEvents();
-
-                if (i == framenum - 1 && !reader.canRead()) {
-                    JxlEncoderCloseInput(enc.get());
-                }
-#ifdef USE_STREAMING_OUTPUT
-                JxlEncoderFlushInput(enc.get());
-#endif
-                imageframenum++;
-            }
-            ui->progressBarSub->hide();
-            itm->setBackground(0, QColor(128, 255, 255));
-            ui->progressBar->setValue(i + 1);
-            QGuiApplication::processEvents();
-        }
-
-#ifndef USE_STREAMING_OUTPUT
-        QFile outF(outFileName);
-        outF.open(QIODevice::WriteOnly);
-        if (!outF.isWritable()) {
-            outF.close();
-            throw QString("Encode failed: Cannot write to output file");
-        }
-
-        QByteArray compressed(16384, 0x0);
-        auto *nextOut = reinterpret_cast<uint8_t *>(compressed.data());
-        auto availOut = static_cast<size_t>(compressed.size());
-        auto result = JXL_ENC_NEED_MORE_OUTPUT;
-        while (result == JXL_ENC_NEED_MORE_OUTPUT) {
-            result = JxlEncoderProcessOutput(enc.get(), &nextOut, &availOut);
-            if (result != JXL_ENC_ERROR) {
-                outF.write(compressed.data(), compressed.size() - static_cast<int>(availOut));
-            }
-            if (result == JXL_ENC_NEED_MORE_OUTPUT) {
-                compressed.resize(compressed.size() * 2);
-                nextOut = reinterpret_cast<uint8_t *>(compressed.data());
-                availOut = static_cast<size_t>(compressed.size());
-            }
-        }
-        if (JXL_ENC_SUCCESS != result) {
-            outF.close();
-            outF.remove();
-            throw QString("JxlEncoderProcessOutput failed");
-        }
-        outF.close();
-#endif
-
-#ifdef USE_STREAMING_OUTPUT
-        outProcessor.CloseOutputFile();
-#endif
-        const double finalImageSizeKiB = [&]() {
-#ifdef USE_STREAMING_OUTPUT
-            return static_cast<double>(outProcessor.finalized_position) / 1024.0;
-#else
-            return static_cast<double>(QFileInfo(outFileName).size()) / 1024.0;
-#endif
-        }();
-
-        ui->statusBar->showMessage(
-            QString("Encode successful | Final output file size: %1 KiB").arg(QString::number(finalImageSizeKiB)));
-        ui->encodeBtn->setEnabled(true);
-        ui->encodeBtn->setText("Encode");
-        d->isEncoding = false;
-        d->inputFileList.clear();
-
-        ui->menuBar->setEnabled(true);
-        ui->frameListGrp->setEnabled(true);
-        ui->globalSettingGrp->setEnabled(true);
-        setAcceptDrops(true);
-
-    } catch (QString err) {
-        if (!d->encodeAbort) {
-#ifdef USE_STREAMING_OUTPUT
-            outProcessor.CloseOutputFile();
-            outProcessor.DeleteOutputFile();
-#endif
-            QMessageBox::critical(this, "Encoding error", err);
-            d->inputFileList.clear();
-        }
-        ui->statusBar->showMessage(err);
-        ui->encodeBtn->setEnabled(true);
-        ui->encodeBtn->setText("Encode");
-        d->isEncoding = false;
-        d->inputFileList.clear();
-
-        ui->menuBar->setEnabled(true);
-        ui->frameListGrp->setEnabled(true);
-        ui->globalSettingGrp->setEnabled(true);
-        setAcceptDrops(true);
-    } catch (...) {
-#ifdef USE_STREAMING_OUTPUT
-        outProcessor.CloseOutputFile();
-        outProcessor.DeleteOutputFile();
-#endif
-        QMessageBox::critical(this, "Encoding error", "Unexpected Error!");
-        ui->statusBar->showMessage("Unexpected Error!");
-        ui->encodeBtn->setEnabled(true);
-        ui->encodeBtn->setText("Encode");
-        d->isEncoding = false;
-        d->inputFileList.clear();
-
-        ui->menuBar->setEnabled(true);
-        ui->frameListGrp->setEnabled(true);
-        ui->globalSettingGrp->setEnabled(true);
-        setAcceptDrops(true);
+        d->encObj->appendInputFiles(ind);
     }
+
+    d->encObj->parseFirstImage();
+    d->encObj->start();
+
+    // d->encObj->doEncode();
+
+    // if (d->encObj->doEncode()) {
+    //     ui->encodeBtn->setEnabled(true);
+    //     ui->encodeBtn->setText("Encode");
+    //     d->isEncoding = false;
+    //     d->encodeAbort = false;
+
+    //     ui->menuBar->setEnabled(true);
+    //     ui->frameListGrp->setEnabled(true);
+    //     ui->globalSettingGrp->setEnabled(true);
+    //     setAcceptDrops(true);
+    // }
 }

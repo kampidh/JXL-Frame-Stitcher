@@ -146,6 +146,7 @@ struct InputFileData {
 
 struct EncodeParams {
     double distance{0.0};
+    double frameTimeMs{0.0};
 
     int effort{1};
     int numerator{1};
@@ -160,46 +161,9 @@ struct EncodeParams {
     bool losslessAlpha{true};
     bool premulAlpha{false};
     bool lossyModular{false};
+
+    QString outputFileName{};
 };
-
-QString blendModeToString(JxlBlendMode blendMode) {
-    switch (blendMode) {
-    case JXL_BLEND_ADD:
-        return QString("ADD");
-        break;
-    case JXL_BLEND_MULADD:
-        return QString("MULADD");
-        break;
-    case JXL_BLEND_MUL:
-        return QString("MUL");
-        break;
-    case JXL_BLEND_REPLACE:
-        return QString("REPLACE");
-        break;
-    case JXL_BLEND_BLEND:
-        return QString("BLEND");
-        break;
-    default:
-        return QString();
-        break;
-    }
-}
-
-JxlBlendMode stringToBlendMode(const QString &st) {
-    if (st == "ADD") {
-        return JXL_BLEND_ADD;
-    } else if (st == "MULADD") {
-        return JXL_BLEND_MULADD;
-    } else if (st == "MUL") {
-        return JXL_BLEND_MUL;
-    } else if (st == "REPLACE") {
-        return JXL_BLEND_REPLACE;
-    } else if (st == "BLEND") {
-        return JXL_BLEND_BLEND;
-    } else {
-        return JXL_BLEND_BLEND;
-    }
-}
 
 template<typename T>
 void QImageToBuffer(const QImage &img, QByteArray &ba, size_t pxsize, bool alpha)

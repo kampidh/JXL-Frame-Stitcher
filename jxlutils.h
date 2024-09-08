@@ -232,7 +232,7 @@ static constexpr char basicUsage[] = {
 <b>Limitations</b>
 </p>
 <ul>
-<li>Cannot take JXL input yet</li>
+<li>JXL input is coalesced</li>
 </ul>
 </body></html>
 )"};

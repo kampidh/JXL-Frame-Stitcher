@@ -81,6 +81,8 @@ public:
     bool isUnsavedChanges{false};
     QString windowTitle{"JXL Frame Stitching"};
     QString configSaveFile{};
+    QList<QByteArray> supportedFiles{};
+
     QCollator collator;
     QVector<jxfrstch::InputFileData> inputFileList;
     QScopedPointer<JXLEncoderObject> encObj;
@@ -101,6 +103,9 @@ MainWindow::MainWindow(QWidget *parent)
     d->windowTitle += " v" + QString(PROJECT_VERSION);
 
     resetApp();
+
+    d->supportedFiles.append(QImageReader::supportedImageFormats());
+    d->supportedFiles.append("jxl");
 
     d->collator.setNumericMode(true);
     ui->treeWidget->setColumnWidth(0, 120);
@@ -334,7 +339,7 @@ void MainWindow::dropEvent(QDropEvent *event)
                 const QFileInfo fileInfo(url.toLocalFile());
                 if (fileInfo.isFile()
                     && ui->treeWidget->findItems(fileInfo.absoluteFilePath(), Qt::MatchExactly, 0).isEmpty()
-                    && QImageReader::supportedImageFormats().contains(fileInfo.suffix().toLower())) {
+                    && d->supportedFiles.contains(fileInfo.suffix().toLower())) {
                     fileList.append(fileInfo.absoluteFilePath());
                 }
             }
@@ -390,7 +395,7 @@ void MainWindow::resetOrder()
 void MainWindow::addFiles()
 {
     QString ifiles("Image Files (");
-    foreach (const auto &v, QImageReader::supportedImageFormats()) {
+    foreach (const auto &v, d->supportedFiles) {
         ifiles += "*.";
         ifiles += v;
         ifiles += " ";
@@ -407,7 +412,7 @@ void MainWindow::addFiles()
 
                 if (fileInfo.isFile()
                     && ui->treeWidget->findItems(fileInfo.absoluteFilePath(), Qt::MatchExactly, 0).isEmpty()
-                    && QImageReader::supportedImageFormats().contains(fileInfo.suffix().toLower())) {
+                    && d->supportedFiles.contains(fileInfo.suffix().toLower())) {
                     fileList.append(fileInfo.absoluteFilePath());
                 }
             }

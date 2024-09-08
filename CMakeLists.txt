@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(JXLFrameStitching VERSION 0.1.2 LANGUAGES CXX)
+project(JXLFrameStitching VERSION 0.2.0 LANGUAGES CXX)
 
 if (POLICY CMP0002)
     cmake_policy(SET CMP0002 NEW)
@@ -51,6 +51,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         jxlutils.h
         ${app_icon_resource_windows}
         utils/jxlencoderobject.h utils/jxlencoderobject.cpp
+        utils/jxldecoderobject.h utils/jxldecoderobject.cpp
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET JXLFrameStitching APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR

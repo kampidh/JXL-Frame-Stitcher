@@ -1,4 +1,5 @@
 #include "jxlencoderobject.h"
+#include "jxldecoderobject.h"
 
 #include <QColorSpace>
 #include <QImageReader>
@@ -95,19 +96,27 @@ bool JXLEncoderObject::parseFirstImage()
         return false;
     }
 
-    QImage firstLayer(d->idat.first().filename);
-    if (firstLayer.isNull()) {
-        emit sigStatusText("Error: failed to load first image!");
-        return false;
-    }
+    QFileInfo fst(d->idat.first().filename);
 
-    QSize layerSize = firstLayer.size();
-    if (!layerSize.isValid()) {
-        emit sigStatusText("Error: failed to read first layer size!");
-        return false;
+    if (fst.suffix().toLower() != "jxl") {
+        QImage firstLayer(d->idat.first().filename);
+        if (firstLayer.isNull()) {
+            emit sigStatusText("Error: failed to load first image!");
+            return false;
+        }
+
+        QSize layerSize = firstLayer.size();
+        if (!layerSize.isValid()) {
+            emit sigStatusText("Error: failed to read first layer size!");
+            return false;
+        }
+        d->rootSize = layerSize;
+        d->rootICC = firstLayer.colorSpace().iccProfile();
+    } else {
+        JXLDecoderObject cdec(fst.absoluteFilePath());
+        d->rootSize = cdec.getRootFrameSize();
+        d->rootICC = cdec.getIccProfie();
     }
-    d->rootSize = layerSize;
-    d->rootICC = firstLayer.colorSpace().iccProfile();
 
     if (!d->enc) {
         d->enc = JxlEncoderMake(nullptr);
@@ -367,10 +376,12 @@ void JXLEncoderObject::run()
         const jxfrstch::InputFileData ind = d->idat.at(i);
         emit sigCurrentMainProgressBar(i, false);
 
-        QImageReader reader(ind.filename);
+        // QImageReader reader(ind.filename);
+        JXLDecoderObject reader(ind.filename);
 
         int imageframenum = 0;
-        const bool isImageAnim = reader.imageCount() > 1 && reader.supportsAnimation();
+        // const bool isImageAnim = reader.imageCount() > 1 && reader.supportsAnimation();
+        const bool isImageAnim = reader.haveAnimation();
         if (isImageAnim) {
             emit sigEnableSubProgressBar(true, reader.imageCount());
         }

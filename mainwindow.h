@@ -39,7 +39,7 @@ private:
     void dropEvent(QDropEvent *event) override;
 
     class Private;
-    Private *const d{nullptr};
+    QScopedPointer<Private> d;
 
     Ui::MainWindow *ui;
 };

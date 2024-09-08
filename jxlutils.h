@@ -6,8 +6,24 @@
 #include <QDebug>
 #include <QFile>
 #include <QString>
+#include <QImage>
 
 #include <jxl/encode_cxx.h>
+
+enum EncodeBitDepth {
+    ENC_BIT_8 = 0,
+    ENC_BIT_16,
+    ENC_BIT_16F,
+    ENC_BIT_32F
+};
+
+enum EncodeColorSpace {
+    ENC_CS_SRGB = 0,
+    ENC_CS_SRGB_LINEAR,
+    ENC_CS_P3,
+    ENC_CS_INHERIT_FIRST,
+    ENC_CS_RAW
+};
 
 // callback taken from https://github.com/libjxl/libjxl/blob/main/lib/jxl/base/c_callback_support.h
 // honestly I'm not even sure what's happening here yet.. hehe
@@ -100,6 +116,103 @@ struct JxlOutputProcessor {
     QByteArray output;
     size_t finalized_position = 0;
 };
+
+struct InputFileData {
+    bool isRefFrame{false};
+    uint16_t frameDuration{1};
+    uint8_t frameReference{0};
+    int16_t frameXPos{0};
+    int16_t frameYPos{0};
+    JxlBlendMode blendMode{JXL_BLEND_BLEND};
+    QString filename{};
+    QString frameName{};
+
+    // lexical comparison
+    bool operator<(const InputFileData &rhs) const
+    {
+        return this->filename.compare(rhs.filename) < 0;
+    }
+
+    bool operator==(const QString &rhs) const
+    {
+        return this->filename == rhs;
+    }
+
+    bool operator==(const InputFileData &rhs) const
+    {
+        return this->filename == rhs.filename;
+    }
+};
+
+struct EncodeParams {
+    double distance{0.0};
+
+    int effort{1};
+    int numerator{1};
+    int denominator{1};
+    int loops{0};
+
+    EncodeColorSpace colorSpace{ENC_CS_SRGB};
+    EncodeBitDepth bitDepth{ENC_BIT_8};
+
+    bool animation{true};
+    bool alpha{true};
+    bool losslessAlpha{true};
+    bool premulAlpha{false};
+    bool lossyModular{false};
+};
+
+QString blendModeToString(JxlBlendMode blendMode) {
+    switch (blendMode) {
+    case JXL_BLEND_ADD:
+        return QString("ADD");
+        break;
+    case JXL_BLEND_MULADD:
+        return QString("MULADD");
+        break;
+    case JXL_BLEND_MUL:
+        return QString("MUL");
+        break;
+    case JXL_BLEND_REPLACE:
+        return QString("REPLACE");
+        break;
+    case JXL_BLEND_BLEND:
+        return QString("BLEND");
+        break;
+    default:
+        return QString();
+        break;
+    }
+}
+
+JxlBlendMode stringToBlendMode(const QString &st) {
+    if (st == "ADD") {
+        return JXL_BLEND_ADD;
+    } else if (st == "MULADD") {
+        return JXL_BLEND_MULADD;
+    } else if (st == "MUL") {
+        return JXL_BLEND_MUL;
+    } else if (st == "REPLACE") {
+        return JXL_BLEND_REPLACE;
+    } else if (st == "BLEND") {
+        return JXL_BLEND_BLEND;
+    } else {
+        return JXL_BLEND_BLEND;
+    }
+}
+
+template<typename T>
+void QImageToBuffer(const QImage &img, QByteArray &ba, size_t pxsize, bool alpha)
+{
+    auto srcPointer = reinterpret_cast<const T *>(img.constBits());
+    auto dstPointer = reinterpret_cast<T *>(ba.data());
+    const int chan = (alpha) ? 4 : 3;
+    for (size_t i = 0; i < pxsize; i++) {
+        memcpy(dstPointer, srcPointer, sizeof(T) * chan);
+        srcPointer += 4;
+        dstPointer += chan;
+    }
+}
 
 static constexpr char aboutData[] = {
     R"(<html><head/><body>

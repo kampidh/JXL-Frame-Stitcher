@@ -11,7 +11,6 @@
 #include <QImageReader>
 #include <QMessageBox>
 #include <QMimeData>
-#include <QSettings>
 
 #include <QCborMap>
 #include <QCborValue>
@@ -32,88 +31,6 @@
 
 #define USE_STREAMING_OUTPUT // need libjxl >= 0.10.0
 
-namespace jxfrstch
-{
-struct InputFileData {
-    bool isRefFrame{false};
-    uint16_t frameDuration{1};
-    uint8_t frameReference{0};
-    int16_t frameXPos{0};
-    int16_t frameYPos{0};
-    JxlBlendMode blendMode{JXL_BLEND_BLEND};
-    QString filename{};
-    QString frameName{};
-
-    // lexical comparison
-    bool operator<(const InputFileData &rhs) const
-    {
-        return this->filename.compare(rhs.filename) < 0;
-    }
-
-    bool operator==(const QString &rhs) const
-    {
-        return this->filename == rhs;
-    }
-
-    bool operator==(const InputFileData &rhs) const
-    {
-        return this->filename == rhs.filename;
-    }
-};
-
-QString blendModeToString(JxlBlendMode blendMode) {
-    switch (blendMode) {
-    case JXL_BLEND_ADD:
-        return QString("ADD");
-        break;
-    case JXL_BLEND_MULADD:
-        return QString("MULADD");
-        break;
-    case JXL_BLEND_MUL:
-        return QString("MUL");
-        break;
-    case JXL_BLEND_REPLACE:
-        return QString("REPLACE");
-        break;
-    case JXL_BLEND_BLEND:
-        return QString("BLEND");
-        break;
-    default:
-        return QString();
-        break;
-    }
-}
-
-JxlBlendMode stringToBlendMode(const QString &st) {
-    if (st == "ADD") {
-        return JXL_BLEND_ADD;
-    } else if (st == "MULADD") {
-        return JXL_BLEND_MULADD;
-    } else if (st == "MUL") {
-        return JXL_BLEND_MUL;
-    } else if (st == "REPLACE") {
-        return JXL_BLEND_REPLACE;
-    } else if (st == "BLEND") {
-        return JXL_BLEND_BLEND;
-    } else {
-        return JXL_BLEND_BLEND;
-    }
-}
-
-template<typename T>
-void QImageToBuffer(const QImage &img, QByteArray &ba, size_t pxsize, bool alpha)
-{
-    auto srcPointer = reinterpret_cast<const T *>(img.constBits());
-    auto dstPointer = reinterpret_cast<T *>(ba.data());
-    const int chan = (alpha) ? 4 : 3;
-    for (size_t i = 0; i < pxsize; i++) {
-        memcpy(dstPointer, srcPointer, sizeof(T) * chan);
-        srcPointer += 4;
-        dstPointer += chan;
-    }
-}
-} // namespace jxfrstch
-
 class Q_DECL_HIDDEN MainWindow::Private
 {
 public:
@@ -124,7 +41,6 @@ public:
     QString configSaveFile{};
     QCollator collator;
     QVector<jxfrstch::InputFileData> inputFileList;
-    QList<QTreeWidgetItem *> wdgList;
 };
 
 MainWindow::MainWindow(QWidget *parent)
@@ -222,9 +138,8 @@ MainWindow::MainWindow(QWidget *parent)
                 doEncode();
             }
         } else {
-            ui->encodeBtn->setText("Encode");
+            ui->encodeBtn->setText("Aborting...");
             d->encodeAbort = true;
-            d->isEncoding = false;
         }
     });
 
@@ -265,7 +180,7 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::~MainWindow()
 {
     delete ui;
-    delete d;
+    d.reset();
 }
 
 void MainWindow::resetApp()
@@ -926,7 +841,6 @@ void MainWindow::doEncode()
     const QRect bounds = firstLayer.rect();
 
     const QByteArray firstLayerIcc = firstLayer.colorSpace().iccProfile();
-    std::vector<uint8_t> sda;
 
     auto enc = JxlEncoderMake(nullptr);
     auto runner = JxlResizableParallelRunnerMake(nullptr);

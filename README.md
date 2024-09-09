@@ -1,13 +1,13 @@
 # JXL Frame Stitching
 ### Join multiple images into a single JPEG XL image as multilayered or animated, using libjxl's API.
 
-![Screnshot](jxlframess-011.png)
+![Screnshot](jxlframess-020.png)
 
 Written in C++ with Qt 6.5.3
 
 ## Features
 - Image loading is handled with QImage, will accept anything that QImage can load
-- Animated inputs (eg. GIF) will be encoded as animation as well (as long as the project is set to the same framerate), therefore stitching multiple animation is possible
+- Animated inputs (eg. GIF and JXL) will be encoded as animation as well (as long as the project is set to the same framerate), therefore stitching multiple animation is possible
 - Input images can have different dimensions aka. crops, and out-of-bounds pixels will be retained
 - Can encode to 8, 16, float 16, and float 32 bit per channel, with or without alpha channel
 - Multiple colorspace support, can also retain ICC profile that's taken from the first frame
@@ -16,7 +16,6 @@ Written in C++ with Qt 6.5.3
   - Multilayered: first image = bottom layer; last image = top layer
 
 ### Current limitations:
-- Cannot insert JXL image as input, not implemented decoding yet ***(soon-ish!)***
 - Only RGB color model
 
 ### Where to view the results?

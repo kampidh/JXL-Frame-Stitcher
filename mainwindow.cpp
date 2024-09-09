@@ -871,6 +871,7 @@ void MainWindow::doEncode()
     params.lossyModular = ui->modularLossyChk->isChecked();
     params.frameTimeMs = (static_cast<double>(denominator * 1000) / static_cast<double>(numerator));
     params.outputFileName = ui->outFileLineEdit->text();
+    params.coalesceJxlInput = ui->actionCoalesce_JXL_input->isChecked();
 
     if (encEffort > 10) {
         const auto diag = QMessageBox::warning(this,

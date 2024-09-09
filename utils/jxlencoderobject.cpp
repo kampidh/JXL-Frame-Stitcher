@@ -363,6 +363,7 @@ void JXLEncoderObject::run()
 
     const int framenum = d->idat.size();
     JXLDecoderObject reader;
+    reader.setEncodeParams(d->params);
 
     for (int i = 0; i < framenum; i++) {
         if (d->encodeAbort && !d->abortCompleteFile) {

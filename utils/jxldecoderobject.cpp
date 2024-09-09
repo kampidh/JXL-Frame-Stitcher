@@ -11,6 +11,8 @@
 #include <jxl/color_encoding.h>
 #include <jxl/resizable_parallel_runner_cxx.h>
 
+// #define JXL_DECODER_QDEBUG
+
 class Q_DECL_HIDDEN JXLDecoderObject::Private
 {
 public:
@@ -178,15 +180,19 @@ bool JXLDecoderObject::decodeJxlMetadata()
         d->errStr = "JxlDecoderSetRenderSpotcolors failed";
         return false;
     };
-    if (JXL_DEC_SUCCESS != JxlDecoderSetCoalescing(d->dec.get(), JXL_FALSE)) {
+    if (JXL_DEC_SUCCESS != JxlDecoderSetCoalescing(d->dec.get(), d->params.coalesceJxlInput ? JXL_TRUE : JXL_FALSE)) {
         d->errStr = "JxlDecoderSetCoalescing failed";
         return false;
     };
 
     for(;;) {
-        // qDebug() << "---";
+#ifdef JXL_DECODER_QDEBUG
+        qDebug() << "---";
+#endif
         JxlDecoderStatus status = JxlDecoderProcessInput(d->dec.get());
-        // qDebug() << "status:" << Qt::hex << status;
+#ifdef JXL_DECODER_QDEBUG
+        qDebug() << "status:" << Qt::hex << status;
+#endif
 
         if (status == JXL_DEC_ERROR) {
             d->errStr = "Decoder error";
@@ -209,7 +215,7 @@ bool JXLDecoderObject::decodeJxlMetadata()
                     d->isCMYK = true;
                 }
             }
-
+#ifdef JXL_DECODER_QDEBUG
             qDebug() << "Info";
             qDebug() << "Size:" << d->m_info.xsize << "x" << d->m_info.ysize;
             qDebug() << "Depth:" << d->m_info.bits_per_sample << d->m_info.exponent_bits_per_sample;
@@ -220,13 +226,14 @@ bool JXLDecoderObject::decodeJxlMetadata()
                      << "tick:" << d->m_info.animation.tps_numerator << d->m_info.animation.tps_denominator;
             qDebug() << "Original profile?" << d->m_info.uses_original_profile;
             qDebug() << "Has preview?" << d->m_info.have_preview << d->m_info.preview.xsize << "x" << d->m_info.preview.ysize;
-
+#endif
             const uint32_t numthreads = [&]() {
                 return JxlResizableParallelRunnerSuggestThreads(d->m_info.xsize, d->m_info.ysize);
             }();
+#ifdef JXL_DECODER_QDEBUG
             qDebug() << "Threads set:" << numthreads;
+#endif
             JxlResizableParallelRunnerSetThreads(d->runner.get(), numthreads);
-
             d->jxlHasAnim = (d->m_info.have_animation == JXL_TRUE);
             d->rootSize = QSize(d->m_info.xsize, d->m_info.ysize);
             d->rootWidth = d->rootSize.width();
@@ -409,7 +416,7 @@ QImage JXLDecoderObject::read()
                 d->errStr = "JxlDecoderSetRenderSpotcolors failed";
                 return QImage();
             };
-            if (JXL_DEC_SUCCESS != JxlDecoderSetCoalescing(d->dec.get(), JXL_FALSE)) {
+            if (JXL_DEC_SUCCESS != JxlDecoderSetCoalescing(d->dec.get(), d->params.coalesceJxlInput ? JXL_TRUE : JXL_FALSE)) {
                 d->errStr = "JxlDecoderSetCoalescing failed";
                 return QImage();
             };
@@ -418,8 +425,19 @@ QImage JXLDecoderObject::read()
 
         d->m_rawData.clear();
 
+        const uint32_t numthreads = [&]() {
+            return JxlResizableParallelRunnerSuggestThreads(d->m_info.xsize, d->m_info.ysize);
+        }();
+        JxlResizableParallelRunnerSetThreads(d->runner.get(), numthreads);
+
         for(;;) {
+#ifdef JXL_DECODER_QDEBUG
+            qDebug() << "---";
+#endif
             JxlDecoderStatus status = JxlDecoderProcessInput(d->dec.get());
+#ifdef JXL_DECODER_QDEBUG
+            qDebug() << "status:" << Qt::hex << status;
+#endif
 
             if (status == JXL_DEC_ERROR) {
                 d->errStr = "Decoder error";

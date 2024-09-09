@@ -690,6 +690,7 @@
     <addaction name="actionAbout"/>
     <addaction name="actionAbout_Qt"/>
     <addaction name="separator"/>
+    <addaction name="actionCoalesce_JXL_input"/>
     <addaction name="actionEnable_effort_11"/>
    </widget>
    <addaction name="menuFile"/>
@@ -756,6 +757,20 @@
    </property>
    <property name="text">
     <string>Enable effort 11</string>
+   </property>
+  </action>
+  <action name="actionCoalesce_JXL_input">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Coalesce JXL input</string>
+   </property>
+   <property name="statusTip">
+    <string>If enabled, this will coalesce / merge individual JXL layers (not frames) on input</string>
    </property>
   </action>
  </widget>

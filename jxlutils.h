@@ -161,6 +161,7 @@ struct EncodeParams {
     bool losslessAlpha{true};
     bool premulAlpha{false};
     bool lossyModular{false};
+    bool coalesceJxlInput{false};
 
     QString outputFileName{};
 };

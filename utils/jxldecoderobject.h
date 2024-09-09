@@ -7,20 +7,26 @@
 class JXLDecoderObject
 {
 public:
+    JXLDecoderObject();
     JXLDecoderObject(const QString &inputFilename);
     ~JXLDecoderObject();
 
     void setEncodeParams(const jxfrstch::EncodeParams &params);
-    QSize getRootFrameSize();
-    QByteArray getIccProfie();
+    void setFileName(const QString &inputFilename);
 
-    int imageCount();
-    bool haveAnimation();
-    bool canRead();
+    bool isJxl();
     QImage read();
-    QString errorString();
-    int nextImageDelay();
-    QRect currentImageRect();
+
+    int imageCount() const;
+    bool haveAnimation() const;
+    bool canRead() const;
+    QString errorString() const;
+    int nextImageDelay() const;
+    QRect currentImageRect() const;
+    JxlFrameHeader getJxlFrameHeader() const;
+    QString getFrameName() const;
+    QSize getRootFrameSize() const;
+    QByteArray getIccProfie() const;
 
 private:
     bool decodeJxlMetadata();

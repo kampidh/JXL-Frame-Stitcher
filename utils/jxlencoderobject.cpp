@@ -363,6 +363,7 @@ void JXLEncoderObject::run()
     auto frameHeader = std::make_unique<JxlFrameHeader>();
 
     const int framenum = d->idat.size();
+    JXLDecoderObject reader;
 
     for (int i = 0; i < framenum; i++) {
         if (d->encodeAbort && !d->abortCompleteFile) {
@@ -377,12 +378,12 @@ void JXLEncoderObject::run()
         emit sigCurrentMainProgressBar(i, false);
 
         // QImageReader reader(ind.filename);
-        JXLDecoderObject reader(ind.filename);
+        reader.setFileName(ind.filename);
 
         int imageframenum = 0;
         // const bool isImageAnim = reader.imageCount() > 1 && reader.supportsAnimation();
         const bool isImageAnim = reader.haveAnimation();
-        if (isImageAnim) {
+        if (isImageAnim || reader.imageCount() > 1) {
             emit sigEnableSubProgressBar(true, reader.imageCount());
         }
         while (reader.canRead()) {
@@ -399,6 +400,7 @@ void JXLEncoderObject::run()
             size_t frameResolution;
             {
                 QImage currentFrame(reader.read());
+                const QRect currentFrameRect = reader.currentImageRect();
 
                 if (currentFrame.isNull()) {
                     emit sigThrowError(reader.errorString());
@@ -408,6 +410,13 @@ void JXLEncoderObject::run()
                 if ((currentFrame.width() != d->rootSize.width() || currentFrame.height() != d->rootSize.height())
                     || ((frameXPos != 0 || frameYPos != 0) && i > 0)) {
                     needCrop = true;
+                }
+
+                if ((currentFrameRect.x() != 0 || currentFrameRect.y() != 0) && imageframenum > 0) {
+                    needCrop = true;
+                    // offset with set position
+                    frameXPos += currentFrameRect.x();
+                    frameYPos += currentFrameRect.y();
                 }
 
                 switch (d->params.bitDepth) {
@@ -498,8 +507,10 @@ void JXLEncoderObject::run()
             }
 
             const uint16_t frameTick = [&]() {
-                if (!isImageAnim || !reader.canRead()) { // can't read == end of animation or just a single frame
+                if (!(isImageAnim || reader.imageCount() > 0) || !reader.canRead()) { // can't read == end of animation or just a single frame
                     return ind.frameDuration;
+                } else if (reader.nextImageDelay() == 0) {
+                    return static_cast<uint16_t>(0);
                 } else {
                     return static_cast<uint16_t>(
                         qRound(qMax(static_cast<float>(reader.nextImageDelay()) / d->params.frameTimeMs, 1.0)));
@@ -526,6 +537,22 @@ void JXLEncoderObject::run()
                 frameHeader->layer_info.xsize = static_cast<uint32_t>(frameSize.width());
                 frameHeader->layer_info.ysize = static_cast<uint32_t>(frameSize.height());
             }
+            QString frameName(ind.frameName);
+            if (reader.isJxl()) {
+                const JxlFrameHeader hd = reader.getJxlFrameHeader();
+                frameHeader->layer_info.blend_info = hd.layer_info.blend_info;
+                frameHeader->layer_info.save_as_reference = hd.layer_info.save_as_reference;
+                if (!reader.getFrameName().isEmpty()) {
+                    if (frameName.isEmpty()) {
+                        frameName += reader.getFrameName();
+                    } else {
+                        frameName += " - " + reader.getFrameName();
+                    }
+                    if (frameName.toUtf8().size() > 1071) {
+                        frameName.truncate(1071);
+                    }
+                }
+            }
 
             if (JxlEncoderSetFrameHeader(frameSettings, frameHeader.get()) != JXL_ENC_SUCCESS) {
                 emit sigThrowError("JxlEncoderSetFrameHeader failed!");
@@ -533,8 +560,8 @@ void JXLEncoderObject::run()
                 return;
             }
 
-            if (!ind.frameName.isEmpty() && ind.frameName.toUtf8().size() <= 1071) {
-                if (JxlEncoderSetFrameName(frameSettings, ind.frameName.toUtf8()) != JXL_ENC_SUCCESS) {
+            if (!frameName.isEmpty() && frameName.toUtf8().size() <= 1071) {
+                if (JxlEncoderSetFrameName(frameSettings, frameName.toUtf8()) != JXL_ENC_SUCCESS) {
                     emit sigThrowError("JxlEncoderSetFrameName failed!");
                     d->isAborted = true;
                     return;
@@ -564,7 +591,7 @@ void JXLEncoderObject::run()
 #endif
             }();
 
-            if (isImageAnim) {
+            if (isImageAnim || reader.imageCount() > 1) {
                 emit sigStatusText(QString("Processing frame %1 of %2 (Subframe %3 of %4) | Output file size: %5 KiB")
                                        .arg(QString::number(i + 1),
                                             QString::number(framenum),

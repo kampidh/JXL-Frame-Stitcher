@@ -24,13 +24,14 @@ public:
     double frameDurationMs{0.0};
     int rootWidth{0};
     int rootHeight{0};
-    int numFrames{1};
+    int numFrames{0};
     QSize rootSize{};
     QByteArray rootICC{};
     QRect currentRect{};
     QString errStr{};
     QString inputFileName{};
     QString inputFileSuffix{};
+    QString frameName{};
     QStringList oneShotSuffixes{};
 
     jxfrstch::EncodeParams params{};
@@ -49,12 +50,30 @@ public:
     JxlFrameHeader m_header{};
 };
 
+JXLDecoderObject::JXLDecoderObject()
+    : d(new Private)
+{
+}
+
 JXLDecoderObject::JXLDecoderObject(const QString &inputFilename)
     : d(new Private)
+{
+    setFileName(inputFilename);
+}
+
+JXLDecoderObject::~JXLDecoderObject()
+{
+    d.reset();
+}
+
+void JXLDecoderObject::setFileName(const QString &inputFilename)
 {
     d->inputFileName = inputFilename;
     const QFileInfo fi(d->inputFileName);
     d->inputFileSuffix = fi.suffix().toLower();
+
+    d->jxlRawInputData.clear();
+    d->m_rawData.clear();
 
     // some files can trigger infinite loop when calling canRead()...
     d->oneShotSuffixes = QStringList{
@@ -65,8 +84,27 @@ JXLDecoderObject::JXLDecoderObject(const QString &inputFilename)
     if (d->inputFileSuffix == "jxl") {
         d->jxlFile.setFileName(inputFilename);
         d->isJxl = true;
-        d->dec = JxlDecoderMake(nullptr);
-        d->runner = JxlResizableParallelRunnerMake(nullptr);
+        if (!d->dec)
+            d->dec = JxlDecoderMake(nullptr);
+        if (!d->runner)
+            d->runner = JxlResizableParallelRunnerMake(nullptr);
+
+        JxlDecoderReset(d->dec.get());
+        d->isCMYK = false;
+        d->jxlHasAnim = false;
+        d->isLast = false;
+        d->readingSet = false;
+        d->oneShotDecode = false;
+        d->frameDurationMs = 0.0;
+        d->rootWidth = 0;
+        d->rootHeight = 0;
+        d->numFrames = 0;
+        d->rootSize = QSize();
+        d->rootICC.clear();
+        d->currentRect = QRect();
+        d->errStr = QString();
+        d->frameName = QString();
+
         d->isDecodeable = decodeJxlMetadata();
     } else {
         d->reader.setFileName(inputFilename);
@@ -74,9 +112,9 @@ JXLDecoderObject::JXLDecoderObject(const QString &inputFilename)
     }
 }
 
-JXLDecoderObject::~JXLDecoderObject()
+bool JXLDecoderObject::isJxl()
 {
-    d.reset();
+    return d->isJxl;
 }
 
 bool JXLDecoderObject::decodeJxlMetadata()
@@ -97,6 +135,7 @@ bool JXLDecoderObject::decodeJxlMetadata()
     }
 
     d->jxlRawInputData = d->jxlFile.readAll();
+    d->jxlFile.close();
 
     const auto validation = JxlSignatureCheck(reinterpret_cast<const uint8_t *>(d->jxlRawInputData.constData()),
                                               static_cast<size_t>(d->jxlRawInputData.size()));
@@ -113,7 +152,7 @@ bool JXLDecoderObject::decodeJxlMetadata()
     }
 
     if (JXL_DEC_SUCCESS
-        != JxlDecoderSubscribeEvents(d->dec.get(), JXL_DEC_BASIC_INFO | JXL_DEC_COLOR_ENCODING)) {
+        != JxlDecoderSubscribeEvents(d->dec.get(), JXL_DEC_BASIC_INFO | JXL_DEC_COLOR_ENCODING | JXL_DEC_FRAME)) {
         d->errStr = "JxlDecoderSubscribeEvents failed";
         return false;
     }
@@ -132,6 +171,15 @@ bool JXLDecoderObject::decodeJxlMetadata()
     JxlDecoderCloseInput(d->dec.get());
     if (JXL_DEC_SUCCESS != JxlDecoderSetDecompressBoxes(d->dec.get(), JXL_TRUE)) {
         d->errStr = "JxlDecoderSetDecompressBoxes failed";
+        return false;
+    };
+
+    if (JXL_DEC_SUCCESS != JxlDecoderSetRenderSpotcolors(d->dec.get(), JXL_TRUE)) {
+        d->errStr = "JxlDecoderSetRenderSpotcolors failed";
+        return false;
+    };
+    if (JXL_DEC_SUCCESS != JxlDecoderSetCoalescing(d->dec.get(), JXL_FALSE)) {
+        d->errStr = "JxlDecoderSetCoalescing failed";
         return false;
     };
 
@@ -235,6 +283,8 @@ bool JXLDecoderObject::decodeJxlMetadata()
                 d->errStr = "JxlDecoderGetColorAsICCProfile failed";
                 return false;
             }
+        } else if (status == JXL_DEC_FRAME) {
+            d->numFrames++;
         } else if (status == JXL_DEC_SUCCESS) {
             JxlDecoderReleaseInput(d->dec.get());
             break;
@@ -256,7 +306,7 @@ void JXLDecoderObject::setEncodeParams(const jxfrstch::EncodeParams &params)
     d->params = params;
 }
 
-QSize JXLDecoderObject::getRootFrameSize()
+QSize JXLDecoderObject::getRootFrameSize() const
 {
     if (!d->isJxl) {
         return d->reader.size();
@@ -266,7 +316,7 @@ QSize JXLDecoderObject::getRootFrameSize()
     return QSize();
 }
 
-QByteArray JXLDecoderObject::getIccProfie()
+QByteArray JXLDecoderObject::getIccProfie() const
 {
     if (!d->isJxl) {
         return QImage(d->inputFileName).colorSpace().iccProfile();
@@ -276,18 +326,17 @@ QByteArray JXLDecoderObject::getIccProfie()
     return QByteArray();
 }
 
-int JXLDecoderObject::imageCount()
+int JXLDecoderObject::imageCount() const
 {
     if (!d->isJxl) {
         return d->reader.imageCount();
     } else if (d->isJxl) {
-        // unknown,
-        return 0;
+        return d->numFrames;
     }
     return 1;
 }
 
-int JXLDecoderObject::nextImageDelay()
+int JXLDecoderObject::nextImageDelay() const
 {
     if (!d->isJxl) {
         return d->reader.nextImageDelay();
@@ -297,7 +346,7 @@ int JXLDecoderObject::nextImageDelay()
     return (haveAnimation() ? 1 : 0);
 }
 
-bool JXLDecoderObject::haveAnimation()
+bool JXLDecoderObject::haveAnimation() const
 {
     if (!d->isJxl) {
         return (d->reader.imageCount() > 1 && d->reader.supportsAnimation());
@@ -307,7 +356,7 @@ bool JXLDecoderObject::haveAnimation()
     return false;
 }
 
-bool JXLDecoderObject::canRead()
+bool JXLDecoderObject::canRead() const
 {
     if (!d->isJxl) {
         if (d->oneShotDecode) {
@@ -355,6 +404,15 @@ QImage JXLDecoderObject::read()
                 d->errStr = "JxlDecoderSetDecompressBoxes failed";
                 return QImage();
             };
+
+            if (JXL_DEC_SUCCESS != JxlDecoderSetRenderSpotcolors(d->dec.get(), JXL_TRUE)) {
+                d->errStr = "JxlDecoderSetRenderSpotcolors failed";
+                return QImage();
+            };
+            if (JXL_DEC_SUCCESS != JxlDecoderSetCoalescing(d->dec.get(), JXL_FALSE)) {
+                d->errStr = "JxlDecoderSetCoalescing failed";
+                return QImage();
+            };
             d->readingSet = false;
         }
 
@@ -390,6 +448,18 @@ QImage JXLDecoderObject::read()
                     return QImage();
                 }
                 d->isLast = (d->m_header.is_last == JXL_TRUE);
+
+                const uint32_t nameLength = d->m_header.name_length + 1;
+                if (nameLength > 0) {
+                    QByteArray rawFrameName(nameLength, 0x0);
+                    if (JXL_DEC_SUCCESS != JxlDecoderGetFrameName(d->dec.get(), rawFrameName.data(), nameLength)) {
+                        d->errStr = "JxlDecoderGetFrameName failed";
+                        return QImage();
+                    }
+                    d->frameName = QString::fromUtf8(rawFrameName);
+                } else {
+                    d->frameName = QString();
+                }
             } else if (status == JXL_DEC_FULL_IMAGE) {
                 if (!d->isLast) {
                     break;
@@ -431,7 +501,17 @@ QImage JXLDecoderObject::read()
     return QImage();
 }
 
-QString JXLDecoderObject::errorString()
+JxlFrameHeader JXLDecoderObject::getJxlFrameHeader() const
+{
+    return d->m_header;
+}
+
+QString JXLDecoderObject::getFrameName() const
+{
+    return d->frameName;
+}
+
+QString JXLDecoderObject::errorString() const
 {
     if (!d->isJxl) {
         return d->reader.errorString();
@@ -441,7 +521,7 @@ QString JXLDecoderObject::errorString()
     return QString();
 }
 
-QRect JXLDecoderObject::currentImageRect()
+QRect JXLDecoderObject::currentImageRect() const
 {
     if (!d->isJxl) {
         return d->reader.currentImageRect();

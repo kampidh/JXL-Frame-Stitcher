@@ -228,12 +228,6 @@ static constexpr char basicUsage[] = {
 <li><b>Alpha lossless</b>: if checked, alpha channel will set as lossless regardless of distance setting</li>
 <li><b>Alpha premultiply</b>: sets the alpha premultiply flag on libjxl</li>
 </ul>
-<p>
-<b>Limitations</b>
-</p>
-<ul>
-<li>JXL input is coalesced</li>
-</ul>
 </body></html>
 )"};
 } // namespace jxfrstch

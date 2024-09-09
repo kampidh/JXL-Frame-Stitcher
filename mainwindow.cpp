@@ -252,8 +252,6 @@ MainWindow::MainWindow(QWidget *parent)
         QGuiApplication::processEvents();
     });
     connect(d->encObj.get(), &JXLEncoderObject::finished, this, [&]() {
-        d->encObj->cleanupEncoder();
-        d->encObj->resetEncoder();
         ui->encodeBtn->setText("Encode");
         ui->menuBar->setEnabled(true);
         ui->frameListGrp->setEnabled(true);
@@ -938,6 +936,7 @@ void MainWindow::doEncode()
         d->encObj->appendInputFiles(ind);
     }
 
-    d->encObj->parseFirstImage();
-    d->encObj->start();
+    if (d->encObj->canEncode()) {
+        d->encObj->start();
+    }
 }

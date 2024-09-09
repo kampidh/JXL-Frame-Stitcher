@@ -4,6 +4,9 @@
 #include "jxlutils.h"
 #include <QString>
 
+/*
+ * A very simple wrapper for QImageReader to add support for decoding JPEG XL images with libjxl
+ */
 class JXLDecoderObject
 {
 public:

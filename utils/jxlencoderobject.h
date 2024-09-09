@@ -7,6 +7,9 @@
 
 #include "jxlutils.h"
 
+/*
+ * QThread-based JPEG XL image encoder using libjxl
+ */
 class JXLEncoderObject : public QThread
 {
     Q_OBJECT
@@ -16,11 +19,12 @@ public:
 
     void setEncodeParams(const jxfrstch::EncodeParams &params);
     void appendInputFiles(const jxfrstch::InputFileData &ifd);
-    bool parseFirstImage();
-    bool doEncode();
+    bool canEncode();
     bool resetEncoder();
     bool cleanupEncoder();
     void abortEncode(bool completeFile);
+
+    bool doEncode();
 
 protected:
     void run() override;

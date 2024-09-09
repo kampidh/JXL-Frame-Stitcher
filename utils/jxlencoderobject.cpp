@@ -55,15 +55,15 @@ void JXLEncoderObject::abortEncode(bool completeFile)
 
 bool JXLEncoderObject::resetEncoder()
 {
-    if (!d->enc || !d->runner) {
-        return false;
-    }
-    JxlEncoderReset(d->enc.get());
-
     d->isAborted = false;
     d->encodeAbort = false;
     d->abortCompleteFile = true;
     d->idat.clear();
+
+    if (!d->enc || !d->runner) {
+        return false;
+    }
+    JxlEncoderReset(d->enc.get());
 
     return true;
 }
@@ -90,7 +90,7 @@ void JXLEncoderObject::appendInputFiles(const jxfrstch::InputFileData &ifd)
     d->idat.append(ifd);
 }
 
-bool JXLEncoderObject::parseFirstImage()
+bool JXLEncoderObject::canEncode()
 {
     if (d->idat.isEmpty()) {
         return false;
@@ -139,9 +139,16 @@ bool JXLEncoderObject::parseFirstImage()
 
 void JXLEncoderObject::run()
 {
+    doEncode();
+    cleanupEncoder();
+    resetEncoder();
+}
+
+bool JXLEncoderObject::doEncode()
+{
     if (d->idat.isEmpty()) {
         d->isAborted = true;
-        return;
+        return false;
     }
 
 #ifdef USE_STREAMING_OUTPUT
@@ -149,14 +156,14 @@ void JXLEncoderObject::run()
     if (!outProcessor.SetOutputPath(d->params.outputFileName)) {
         emit sigThrowError("Failed to create output file!");
         d->isAborted = true;
-        return;
+        return false;
     }
 #endif
 
     if (JXL_ENC_SUCCESS != JxlEncoderSetParallelRunner(d->enc.get(), JxlResizableParallelRunner, d->runner.get())) {
         emit sigThrowError("JxlEncoderSetParallelRunner failed!");
         d->isAborted = true;
-        return;
+        return false;
     }
 
     JxlResizableParallelRunnerSetThreads(
@@ -168,7 +175,7 @@ void JXLEncoderObject::run()
     if (JXL_ENC_SUCCESS != JxlEncoderSetOutputProcessor(d->enc.get(), outProcessor.GetOutputProcessor())) {
         emit sigThrowError("JxlEncoderSetOutputProcessor failed!");
         d->isAborted = true;
-        return;
+        return false;
     }
 #endif
 
@@ -190,7 +197,7 @@ void JXLEncoderObject::run()
     default:
         emit sigThrowError("Unsupported bit depth!");
         d->isAborted = true;
-        return;
+        return false;
         break;
     }
     pixelFormat.num_channels = d->params.alpha ? 4 : 3;
@@ -259,7 +266,7 @@ void JXLEncoderObject::run()
     if (JXL_ENC_SUCCESS != JxlEncoderSetBasicInfo(d->enc.get(), &basicInfo)) {
         emit sigThrowError("JxlEncoderSetBasicInfo failed!");
         d->isAborted = true;
-        return;
+        return false;
     }
 
     // Set color space
@@ -292,7 +299,7 @@ void JXLEncoderObject::run()
         if (JXL_ENC_SUCCESS != JxlEncoderSetColorEncoding(d->enc.get(), &cicpDescription)) {
             emit sigThrowError("JxlEncoderSetColorEncoding failed!");
             d->isAborted = true;
-            return;
+            return false;
         }
     } else if (d->params.colorSpace == ENC_CS_INHERIT_FIRST && !d->rootICC.isEmpty()) {
         if (JXL_ENC_SUCCESS
@@ -301,7 +308,7 @@ void JXLEncoderObject::run()
                                        static_cast<size_t>(d->rootICC.size()))) {
             emit sigThrowError("JxlEncoderSetICCProfile failed!");
             d->isAborted = true;
-            return;
+            return false;
         }
     }
 
@@ -355,7 +362,7 @@ void JXLEncoderObject::run()
             || !setSetting(JXL_ENC_FRAME_SETTING_MODULAR, (d->params.lossyModular ? 1 : -1))) {
             emit sigThrowError("JxlEncoderFrameSettings failed!");
             d->isAborted = true;
-            return;
+            return false;
         }
     }
 
@@ -371,7 +378,7 @@ void JXLEncoderObject::run()
             emit sigEnableSubProgressBar(false, 0);
             emit sigStatusText("Encode aborted!");
             d->isAborted = true;
-            return;
+            return false;
         }
 
         const jxfrstch::InputFileData ind = d->idat.at(i);
@@ -405,7 +412,7 @@ void JXLEncoderObject::run()
                 if (currentFrame.isNull()) {
                     emit sigThrowError(reader.errorString());
                     d->isAborted = true;
-                    return;
+                    return false;
                 }
                 if ((currentFrame.width() != d->rootSize.width() || currentFrame.height() != d->rootSize.height())
                     || ((frameXPos != 0 || frameYPos != 0) && i > 0)) {
@@ -435,7 +442,7 @@ void JXLEncoderObject::run()
                 default:
                     emit sigThrowError("Unsupported bit depth!");
                     d->isAborted = true;
-                    return;
+                    return false;
                     break;
                 }
 
@@ -552,14 +559,14 @@ void JXLEncoderObject::run()
             if (JxlEncoderSetFrameHeader(frameSettings, frameHeader.get()) != JXL_ENC_SUCCESS) {
                 emit sigThrowError("JxlEncoderSetFrameHeader failed!");
                 d->isAborted = true;
-                return;
+                return false;
             }
 
             if (!frameName.isEmpty() && frameName.toUtf8().size() <= 1071) {
                 if (JxlEncoderSetFrameName(frameSettings, frameName.toUtf8()) != JXL_ENC_SUCCESS) {
                     emit sigThrowError("JxlEncoderSetFrameName failed!");
                     d->isAborted = true;
-                    return;
+                    return false;
                 }
                 // in case warning is needed
                 // } else if (ind.frameName.toUtf8().size() > 1071) {
@@ -575,7 +582,7 @@ void JXLEncoderObject::run()
                 != JXL_ENC_SUCCESS) {
                 emit sigThrowError("JxlEncoderAddImageFrame failed!");
                 d->isAborted = true;
-                return;
+                return false;
             }
 
             const double currentImageSizeKiB = [&]() {
@@ -616,11 +623,11 @@ void JXLEncoderObject::run()
                 emit sigStatusText(QString("Encode aborted! Outputting partial image | Final output file size: %1 KiB")
                                        .arg(QString::number(finalAbortImageSizeKiB)));
                 d->isAborted = true;
-                return;
+                return false;
 #else
                 emit sigStatusText("Encode aborted!");
                 d->isAborted = true;
-                return;
+                return false;
 #endif
             }
 
@@ -643,7 +650,7 @@ void JXLEncoderObject::run()
         outF.close();
         emit sigThrowError("Encode failed: Cannot write to output file!");
         d->isAborted = true;
-        return;
+        return false;
     }
 
     QByteArray compressed(16384, 0x0);
@@ -666,7 +673,7 @@ void JXLEncoderObject::run()
         outF.remove();
         emit sigThrowError("JxlEncoderProcessOutput failed!");
         d->isAborted = true;
-        return;
+        return false;
     }
     outF.close();
 #endif
@@ -687,5 +694,5 @@ void JXLEncoderObject::run()
     emit sigStatusText(
         QString("Encode successful | Final output file size: %1 KiB").arg(QString::number(finalImageSizeKiB)));
     d->isAborted = false;
-    return;
+    return true;
 }

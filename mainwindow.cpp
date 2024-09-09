@@ -126,9 +126,9 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(ui->treeWidget, &QTreeWidget::itemSelectionChanged, this, &MainWindow::selectingFrames);
 
-    connect(ui->saveAsRefFrameChk, &QCheckBox::toggled, this, [&]() {
+    connect(ui->saveAsRefSpn, &QSpinBox::valueChanged, this, [&](int v) {
         setUnsaved();
-        if (ui->saveAsRefFrameChk->isChecked()) {
+        if (v > 0) {
             ui->frameDurationSpn->setValue(0);
             ui->frameRefSpinBox->setEnabled(false);
             ui->frameDurationSpn->setEnabled(false);
@@ -153,11 +153,11 @@ MainWindow::MainWindow(QWidget *parent)
         if (!ui->isAnimatedBox->isChecked()) {
             ui->frameRefSpinBox->setEnabled(false);
             ui->frameDurationSpn->setEnabled(false);
-            ui->saveAsRefFrameChk->setEnabled(false);
+            ui->saveAsRefSpn->setEnabled(false);
         } else {
-            ui->frameRefSpinBox->setEnabled(!ui->saveAsRefFrameChk->isChecked());
-            ui->frameDurationSpn->setEnabled(!ui->saveAsRefFrameChk->isChecked());
-            ui->saveAsRefFrameChk->setEnabled(ui->treeWidget->selectedItems().size() == 1);
+            ui->frameRefSpinBox->setEnabled(ui->saveAsRefSpn->value() == 0);
+            ui->frameDurationSpn->setEnabled(ui->saveAsRefSpn->value() == 0);
+            ui->saveAsRefSpn->setEnabled(ui->treeWidget->selectedItems().size() == 1);
         }
     });
 
@@ -356,7 +356,7 @@ void MainWindow::resetOrder()
 
         jxfrstch::InputFileData ifd;
         ifd.filename = itm->data(0, 0).toString();
-        ifd.isRefFrame = itm->data(1, 0).toBool();
+        ifd.isRefFrame = itm->data(1, 0).toInt();
         ifd.frameDuration = itm->data(2, 0).toInt();
         ifd.frameReference = itm->data(3, 0).toInt();
         ifd.frameXPos = itm->data(4, 0).toInt();
@@ -477,10 +477,10 @@ void MainWindow::selectingFrames()
 
     if (ui->treeWidget->selectedItems().size() > 1) {
         ui->selectedFrameBox->setEnabled(true);
-        ui->saveAsRefFrameChk->setEnabled(false);
+        ui->saveAsRefSpn->setEnabled(false);
         ui->selectedFileLabel->setText(QString("%1 files selected").arg(ui->treeWidget->selectedItems().size()));
 
-        ui->saveAsRefFrameChk->setChecked(currentSelItem->data(1, 0).toBool());
+        ui->saveAsRefSpn->setValue(currentSelItem->data(1, 0).toInt());
         ui->frameDurationSpn->setValue(-1);
         ui->frameRefSpinBox->setValue(-1);
         ui->frameXPosSpn->setValue(currentSelItem->data(4, 0).toInt());
@@ -492,15 +492,15 @@ void MainWindow::selectingFrames()
         ui->frameYPosSpn->setEnabled(true);
     } else if (ui->treeWidget->selectedItems().size() == 1) {
         ui->selectedFrameBox->setEnabled(true);
-        ui->saveAsRefFrameChk->setEnabled(true);
+        ui->saveAsRefSpn->setEnabled(false);
         ui->selectedFileLabel->setText(currentSelItem->data(0, 0).toString());
-        ui->saveAsRefFrameChk->setChecked(currentSelItem->data(1, 0).toBool());
+        ui->saveAsRefSpn->setValue(currentSelItem->data(1, 0).toInt());
         ui->frameDurationSpn->setValue(currentSelItem->data(2, 0).toInt());
         ui->frameRefSpinBox->setValue(currentSelItem->data(3, 0).toInt());
         ui->frameXPosSpn->setValue(currentSelItem->data(4, 0).toInt());
         ui->frameYPosSpn->setValue(currentSelItem->data(5, 0).toInt());
         ui->frameNameLine->setText(currentSelItem->data(7, 0).toString());
-        if (ui->saveAsRefFrameChk->isChecked()) {
+        if (ui->saveAsRefSpn->value() > 0) {
             ui->frameDurationSpn->setEnabled(false);
             ui->frameRefSpinBox->setEnabled(false);
         } else {
@@ -544,11 +544,11 @@ void MainWindow::selectingFrames()
     if (!ui->isAnimatedBox->isChecked()) {
         ui->frameRefSpinBox->setEnabled(false);
         ui->frameDurationSpn->setEnabled(false);
-        ui->saveAsRefFrameChk->setEnabled(false);
+        ui->saveAsRefSpn->setEnabled(false);
     } else {
-        ui->frameRefSpinBox->setEnabled(!ui->saveAsRefFrameChk->isChecked());
-        ui->frameDurationSpn->setEnabled(!ui->saveAsRefFrameChk->isChecked());
-        ui->saveAsRefFrameChk->setEnabled(ui->treeWidget->selectedItems().size() == 1);
+        ui->frameRefSpinBox->setEnabled(ui->saveAsRefSpn->value() == 0);
+        ui->frameDurationSpn->setEnabled(ui->saveAsRefSpn->value() == 0);
+        ui->saveAsRefSpn->setEnabled(ui->treeWidget->selectedItems().size() == 1);
     }
 }
 
@@ -564,7 +564,7 @@ bool MainWindow::saveConfigAs(bool forceDialog)
         QJsonObject jsobj;
 
         jsobj["filename"] = itm->data(0, 0).toString();
-        jsobj["isRef"] = itm->data(1, 0).toBool();
+        jsobj["isRef"] = itm->data(1, 0).toInt();
         jsobj["frameDur"] = itm->data(2, 0).toInt();
         jsobj["frameRef"] = itm->data(3, 0).toInt();
         jsobj["frameXPos"] = itm->data(4, 0).toInt();
@@ -714,7 +714,12 @@ void MainWindow::openConfig(const QString &tmpfn)
                 const JxlBlendMode tmpBlend = static_cast<JxlBlendMode>(ff.value("blend").toInt(2));
                 const int tmpFrameDur = ff.value("frameDur").toInt(1);
                 const int tmpFrameRef = ff.value("frameRef").toInt(0);
-                const bool tmpIsRef = ff.value("isRef").toBool(false);
+                const int tmpIsRef = [&]() {
+                    if (ff.value("isRef").isBool()) {
+                        return ff.value("isRef").toBool(false) ? 1 : 0;
+                    }
+                    return ff.value("isRef").toInt(0);
+                }();
                 const int tmpFrameX = ff.value("frameXPos").toInt(0);
                 const int tmpFrameY = ff.value("frameYPos").toInt(0);
                 const QString tmpFrameName = ff.value("frameName").toString();
@@ -765,26 +770,19 @@ void MainWindow::currentFrameSettingChanged()
     }
 
     const auto selItemList = ui->treeWidget->selectedItems();
-    const bool isRefCheck = ui->saveAsRefFrameChk->isChecked();
 
     const bool changeFrameDur = (ui->frameDurationSpn->value() != -1);
     const bool changeFrameRef = (ui->frameRefSpinBox->value() != -1);
     const bool changeFrameBlend = (ui->blendModeCmb->currentIndex() != 5);
     const bool changeFrameName = (ui->frameNameLine->text() != "<unchanged>");
 
-    if (isRefCheck) {
-        for (int i = 0; i < ui->treeWidget->topLevelItemCount(); i++) {
-            auto *itm = ui->treeWidget->topLevelItem(i);
-            itm->setData(1, 0, false);
-            itm->setBackground(1, {});
-        }
-    }
-
     foreach (const auto &v, selItemList) {
-        if (isRefCheck) {
+        if (ui->saveAsRefSpn->value() > 0) {
             v->setBackground(1, QColor(128, 255, 128));
+        } else {
+            v->setBackground(1, {});
         }
-        v->setData(1, 0, isRefCheck);
+        v->setData(1, 0, ui->saveAsRefSpn->value());
         if (changeFrameDur)
             v->setData(2, 0, ui->frameDurationSpn->value());
         if (changeFrameRef)
@@ -928,7 +926,7 @@ void MainWindow::doEncode()
         QTreeWidgetItem *itm = ui->treeWidget->topLevelItem(i);
         jxfrstch::InputFileData ind;
         ind.filename = itm->data(0, 0).toString();
-        ind.isRefFrame = itm->data(1, 0).toBool();
+        ind.isRefFrame = itm->data(1, 0).toInt();
         ind.frameDuration = itm->data(2, 0).toInt();
         ind.frameReference = itm->data(3, 0).toInt();
         ind.frameXPos = itm->data(4, 0).toInt();
@@ -941,18 +939,4 @@ void MainWindow::doEncode()
 
     d->encObj->parseFirstImage();
     d->encObj->start();
-
-    // d->encObj->doEncode();
-
-    // if (d->encObj->doEncode()) {
-    //     ui->encodeBtn->setEnabled(true);
-    //     ui->encodeBtn->setText("Encode");
-    //     d->isEncoding = false;
-    //     d->encodeAbort = false;
-
-    //     ui->menuBar->setEnabled(true);
-    //     ui->frameListGrp->setEnabled(true);
-    //     ui->globalSettingGrp->setEnabled(true);
-    //     setAcceptDrops(true);
-    // }
 }

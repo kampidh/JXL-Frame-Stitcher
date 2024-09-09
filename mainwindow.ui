@@ -191,10 +191,17 @@
           </item>
           <item>
            <layout class="QFormLayout" name="formLayout_5">
-            <item row="0" column="1">
-             <widget class="QCheckBox" name="saveAsRefFrameChk">
+            <item row="0" column="0">
+             <widget class="QLabel" name="label_16">
               <property name="text">
-               <string>Save as reference frame 1 (BG)</string>
+               <string>Save to reference:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="0" column="1">
+             <widget class="QSpinBox" name="saveAsRefSpn">
+              <property name="maximum">
+               <number>2</number>
               </property>
              </widget>
             </item>
@@ -218,7 +225,7 @@
             <item row="2" column="0">
              <widget class="QLabel" name="label_11">
               <property name="text">
-               <string>Frame reference:</string>
+               <string>Reference frame:</string>
               </property>
              </widget>
             </item>
@@ -228,55 +235,14 @@
                <number>-1</number>
               </property>
               <property name="maximum">
-               <number>1</number>
+               <number>2</number>
               </property>
              </widget>
             </item>
-            <item row="4" column="0">
-             <widget class="QLabel" name="label_2">
+            <item row="3" column="0">
+             <widget class="QLabel" name="label_14">
               <property name="text">
-               <string>Blend mode:</string>
-              </property>
-             </widget>
-            </item>
-            <item row="4" column="1">
-             <widget class="QComboBox" name="blendModeCmb">
-              <item>
-               <property name="text">
-                <string>JXL_BLEND_BLEND</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>JXL_BLEND_REPLACE</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>JXL_BLEND_ADD</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>JXL_BLEND_MULADD</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>JXL_BLEND_MUL</string>
-               </property>
-              </item>
-              <item>
-               <property name="text">
-                <string>unchanged</string>
-               </property>
-              </item>
-             </widget>
-            </item>
-            <item row="6" column="1">
-             <widget class="QPushButton" name="applyFrameBtn">
-              <property name="text">
-               <string>Apply</string>
+               <string>Frame anchor:</string>
               </property>
              </widget>
             </item>
@@ -326,10 +292,51 @@
               </item>
              </layout>
             </item>
-            <item row="3" column="0">
-             <widget class="QLabel" name="label_14">
+            <item row="4" column="0">
+             <widget class="QLabel" name="label_2">
               <property name="text">
-               <string>Frame anchor:</string>
+               <string>Blend mode:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="1">
+             <widget class="QComboBox" name="blendModeCmb">
+              <item>
+               <property name="text">
+                <string>JXL_BLEND_BLEND</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>JXL_BLEND_REPLACE</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>JXL_BLEND_ADD</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>JXL_BLEND_MULADD</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>JXL_BLEND_MUL</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>unchanged</string>
+               </property>
+              </item>
+             </widget>
+            </item>
+            <item row="5" column="0">
+             <widget class="QLabel" name="label_15">
+              <property name="text">
+               <string>Frame name:</string>
               </property>
              </widget>
             </item>
@@ -343,10 +350,10 @@
               </property>
              </widget>
             </item>
-            <item row="5" column="0">
-             <widget class="QLabel" name="label_15">
+            <item row="6" column="1">
+             <widget class="QPushButton" name="applyFrameBtn">
               <property name="text">
-               <string>Frame name:</string>
+               <string>Apply</string>
               </property>
              </widget>
             </item>

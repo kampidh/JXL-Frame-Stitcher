@@ -359,7 +359,6 @@ void JXLEncoderObject::run()
         }
     }
 
-    bool referenceSaved = false;
     auto frameHeader = std::make_unique<JxlFrameHeader>();
 
     const int framenum = d->idat.size();
@@ -519,17 +518,12 @@ void JXLEncoderObject::run()
 
             JxlEncoderInitFrameHeader(frameHeader.get());
             frameHeader->duration = (d->params.animation) ? frameTick : 0;
-            if (ind.isRefFrame && !referenceSaved) {
-                frameHeader->layer_info.save_as_reference = 1;
-                referenceSaved = true;
-            }
+            frameHeader->layer_info.save_as_reference = static_cast<uint32_t>(ind.isRefFrame);
             frameHeader->layer_info.blend_info.blendmode = ind.blendMode;
             if (d->params.alpha) {
                 frameHeader->layer_info.blend_info.alpha = 0;
             }
-            if (referenceSaved && !ind.isRefFrame) {
-                frameHeader->layer_info.blend_info.source = ind.frameReference;
-            }
+            frameHeader->layer_info.blend_info.source = static_cast<uint32_t>(ind.frameReference);
             if (needCrop) {
                 frameHeader->layer_info.have_crop = JXL_TRUE;
                 frameHeader->layer_info.crop_x0 = static_cast<int32_t>(frameXPos);

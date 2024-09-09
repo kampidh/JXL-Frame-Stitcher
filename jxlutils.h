@@ -118,7 +118,7 @@ struct JxlOutputProcessor {
 };
 
 struct InputFileData {
-    bool isRefFrame{false};
+    uint8_t isRefFrame{0};
     uint16_t frameDuration{1};
     uint8_t frameReference{0};
     int16_t frameXPos{0};
@@ -207,7 +207,7 @@ static constexpr char basicUsage[] = {
 </ul>
 <p><b>Selected Frame</b></p>
 <ul>
-<li><b>Save as reference frame 1</b>: sets the currently selected frame as libjxl reference frame 1 for blending operation</li>
+<li><b>Save to reference</b>: sets the currently selected frame as libjxl reference frame number (0-2) for blending operation, 0 = not referenced / disabled</li>
 <li><b>Frame duration</b>: sets the frame duration in ticks, if the input image is animated (eg. GIF) then this will be the delay for the last subframe before displaying the next frame</li>
 <li><b>Frame reference</b>: selects the reference frame for the blending to take place</li>
 <li><b>Frame anchor</b>: sets the top left (origin) position of current frame in relative to the first frame, can be negative (out of canvas)</li>

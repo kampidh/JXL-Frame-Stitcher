@@ -588,26 +588,37 @@ bool JXLEncoderObject::doEncode()
                 return false;
             }
 
+            bool isMb = false;
+
             const double currentImageSizeKiB = [&]() {
 #ifdef USE_STREAMING_OUTPUT
-                return static_cast<double>(outProcessor.finalized_position) / 1024.0;
+                if (outProcessor.finalized_position > (1024 * 1024 * 10)) {
+                    isMb = true;
+                    return static_cast<double>(outProcessor.finalized_position) / 1024.0 / 1024.0;
+                } else {
+                    isMb = false;
+                    return static_cast<double>(outProcessor.finalized_position) / 1024.0;
+                }
 #else
                 return 0.0;
 #endif
             }();
 
             if (isImageAnim || reader.imageCount() > 1) {
-                emit sigStatusText(QString("Processing frame %1 of %2 (Subframe %3 of %4) | Output file size: %5 KiB")
+                emit sigStatusText(QString("Processing frame %1 of %2 (Subframe %3 of %4) | Output file size: %5 %6")
                                        .arg(QString::number(i + 1),
                                             QString::number(framenum),
                                             QString::number(imageframenum + 1),
                                             QString::number(reader.imageCount()),
-                                            QString::number(currentImageSizeKiB)));
+                                            QString::number(currentImageSizeKiB),
+                                            isMb ? "MiB":"KiB"));
                 emit sigCurrentSubProgressBar(imageframenum + 1);
             } else {
-                emit sigStatusText(
-                    QString("Processing frame %1 of %2 | Output file size: %3 KiB")
-                        .arg(QString::number(i + 1), QString::number(framenum), QString::number(currentImageSizeKiB)));
+                emit sigStatusText(QString("Processing frame %1 of %2 | Output file size: %3 %4")
+                                       .arg(QString::number(i + 1),
+                                            QString::number(framenum),
+                                            QString::number(currentImageSizeKiB),
+                                            isMb ? "MiB" : "KiB"));
             }
 
             if (d->encodeAbort && d->abortCompleteFile) {
@@ -615,7 +626,13 @@ bool JXLEncoderObject::doEncode()
                 JxlEncoderFlushInput(d->enc.get());
                 const double finalAbortImageSizeKiB = [&]() {
 #ifdef USE_STREAMING_OUTPUT
-                    return static_cast<double>(outProcessor.finalized_position) / 1024.0;
+                    if (outProcessor.finalized_position > (1024 * 1024 * 10)) {
+                        isMb = true;
+                        return static_cast<double>(outProcessor.finalized_position) / 1024.0 / 1024.0;
+                    } else {
+                        isMb = false;
+                        return static_cast<double>(outProcessor.finalized_position) / 1024.0;
+                    }
 #else
                     return 0.0;
 #endif
@@ -623,8 +640,8 @@ bool JXLEncoderObject::doEncode()
                 emit sigCurrentMainProgressBar(i + 1, true);
                 emit sigEnableSubProgressBar(false, 0);
 #ifdef USE_STREAMING_OUTPUT
-                emit sigStatusText(QString("Encode aborted! Outputting partial image | Final output file size: %1 KiB")
-                                       .arg(QString::number(finalAbortImageSizeKiB)));
+                emit sigStatusText(QString("Encode aborted! Outputting partial image | Final output file size: %1 %2")
+                                       .arg(QString::number(finalAbortImageSizeKiB), isMb ? "MiB" : "KiB"));
                 d->isAborted = true;
                 return false;
 #else
@@ -684,18 +701,31 @@ bool JXLEncoderObject::doEncode()
 #ifdef USE_STREAMING_OUTPUT
     outProcessor.CloseOutputFile();
 #endif
+    bool isMb = false;
     const double finalImageSizeKiB = [&]() {
 #ifdef USE_STREAMING_OUTPUT
-        return static_cast<double>(outProcessor.finalized_position) / 1024.0;
+        if (outProcessor.finalized_position > (1024 * 1024 * 10)) {
+            isMb = true;
+            return static_cast<double>(outProcessor.finalized_position) / 1024.0 / 1024.0;
+        } else {
+            isMb = false;
+            return static_cast<double>(outProcessor.finalized_position) / 1024.0;
+        }
 #else
-        return static_cast<double>(QFileInfo(d->params.outputFileName).size()) / 1024.0;
+        if (QFileInfo(d->params.outputFileName).size() > (1024 * 1024 * 10)) {
+            isMb = true;
+            return static_cast<double>(QFileInfo(d->params.outputFileName).size()) / 1024.0 / 1024.0;
+        } else {
+            isMb = false;
+            return static_cast<double>(QFileInfo(d->params.outputFileName).size()n) / 1024.0;
+        }
 #endif
     }();
 
     d->idat.clear();
 
     emit sigStatusText(
-        QString("Encode successful | Final output file size: %1 KiB").arg(QString::number(finalImageSizeKiB)));
+        QString("Encode successful | Final output file size: %1 %2").arg(QString::number(finalImageSizeKiB), isMb ? "MiB" : "KiB"));
     d->isAborted = false;
     return true;
 }

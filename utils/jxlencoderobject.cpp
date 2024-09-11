@@ -114,6 +114,9 @@ bool JXLEncoderObject::canEncode()
         d->rootICC = firstLayer.colorSpace().iccProfile();
     } else {
         JXLDecoderObject cdec(fst.absoluteFilePath());
+        if (!cdec.canRead()) {
+            return false;
+        }
         d->rootSize = cdec.getRootFrameSize();
         d->rootICC = cdec.getIccProfie();
     }

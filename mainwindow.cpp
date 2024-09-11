@@ -938,5 +938,13 @@ void MainWindow::doEncode()
 
     if (d->encObj->canEncode()) {
         d->encObj->start();
+    } else {
+        ui->statusBar->showMessage("Encode aborted: unable to read first frame data!");
+        ui->encodeBtn->setText("Encode");
+        ui->menuBar->setEnabled(true);
+        ui->frameListGrp->setEnabled(true);
+        ui->globalSettingGrp->setEnabled(true);
+        ui->progressBar->hide();
+        setAcceptDrops(true);
     }
 }

@@ -13,6 +13,14 @@
 
 // #define JXL_DECODER_QDEBUG
 
+/* this chunked file loading size is completely arbitrary,
+ * define as many as you need.
+ */
+// metadata loading, read 16KB per chunk
+#define METADATA_FILE_CHUNK_SIZE 16384
+// frame loading, read 4MB per chunk
+#define FRAME_FILE_CHUNK_SIZE 4194304
+
 class Q_DECL_HIDDEN JXLDecoderObject::Private
 {
 public:
@@ -27,6 +35,7 @@ public:
     int rootWidth{0};
     int rootHeight{0};
     int numFrames{0};
+
     QSize rootSize{};
     QByteArray rootICC{};
     QRect currentRect{};
@@ -108,6 +117,9 @@ void JXLDecoderObject::setFileName(const QString &inputFilename)
         d->frameName = QString();
 
         d->isDecodeable = decodeJxlMetadata();
+        if (d->jxlFile.isOpen()) {
+            d->jxlFile.close();
+        };
     } else {
         d->reader.setFileName(inputFilename);
         d->isJxl = false;
@@ -130,14 +142,13 @@ bool JXLDecoderObject::decodeJxlMetadata()
         d->errStr = "Failed to open input jxl";
         return false;
     }
-    if (((d->jxlFile.size() / 1024) / 1024) > QImageReader::allocationLimit()) {
-        d->errStr = "Size too big";
-        d->jxlFile.close();
-        return false;
-    }
+    // if (((d->jxlFile.size() / 1024) / 1024) > QImageReader::allocationLimit()) {
+    //     d->errStr = "Size too big";
+    //     d->jxlFile.close();
+    //     return false;
+    // }
 
-    d->jxlRawInputData = d->jxlFile.readAll();
-    d->jxlFile.close();
+    d->jxlRawInputData = d->jxlFile.read(METADATA_FILE_CHUNK_SIZE);
 
     const auto validation = JxlSignatureCheck(reinterpret_cast<const uint8_t *>(d->jxlRawInputData.constData()),
                                               static_cast<size_t>(d->jxlRawInputData.size()));
@@ -170,7 +181,6 @@ bool JXLDecoderObject::decodeJxlMetadata()
         d->errStr = "JxlDecoderSetInput failed";
         return false;
     };
-    JxlDecoderCloseInput(d->dec.get());
     if (JXL_DEC_SUCCESS != JxlDecoderSetDecompressBoxes(d->dec.get(), JXL_TRUE)) {
         d->errStr = "JxlDecoderSetDecompressBoxes failed";
         return false;
@@ -198,8 +208,22 @@ bool JXLDecoderObject::decodeJxlMetadata()
             d->errStr = "Decoder error";
             return false;
         } else if (status == JXL_DEC_NEED_MORE_INPUT) {
-            d->errStr = "Error, already provided all input";
-            return false;
+            if (d->jxlFile.atEnd()) {
+                d->jxlFile.close();
+                JxlDecoderCloseInput(d->dec.get());
+                JxlDecoderReleaseInput(d->dec.get());
+                d->errStr = "Error, already provided all input";
+                return false;
+            }
+            JxlDecoderReleaseInput(d->dec.get());
+            d->jxlRawInputData = d->jxlFile.read(METADATA_FILE_CHUNK_SIZE);
+            if (JXL_DEC_SUCCESS
+                != JxlDecoderSetInput(d->dec.get(),
+                                      reinterpret_cast<const uint8_t *>(d->jxlRawInputData.constData()),
+                                      static_cast<size_t>(d->jxlRawInputData.size()))) {
+                d->errStr = "JxlDecoderSetInput failed";
+                return false;
+            };
         } else if (status == JXL_DEC_BASIC_INFO) {
             if (JXL_DEC_SUCCESS != JxlDecoderGetBasicInfo(d->dec.get(), &d->m_info)) {
                 d->errStr = "JxlDecoderGetBasicInfo failed";
@@ -293,6 +317,8 @@ bool JXLDecoderObject::decodeJxlMetadata()
         } else if (status == JXL_DEC_FRAME) {
             d->numFrames++;
         } else if (status == JXL_DEC_SUCCESS) {
+            d->jxlFile.close();
+            JxlDecoderCloseInput(d->dec.get());
             JxlDecoderReleaseInput(d->dec.get());
             break;
         }
@@ -389,6 +415,13 @@ QImage JXLDecoderObject::read()
     } else if (d->isJxl) {
         // read full image and frame one by one
         if (d->readingSet) {
+            if (!d->jxlFile.open(QIODevice::ReadOnly)) {
+                d->errStr = "Failed to open input jxl";
+                return QImage();
+            }
+            d->jxlRawInputData.clear();
+            d->jxlRawInputData = d->jxlFile.read(FRAME_FILE_CHUNK_SIZE);
+
             if (JXL_DEC_SUCCESS
                 != JxlDecoderSubscribeEvents(d->dec.get(), JXL_DEC_FULL_IMAGE | JXL_DEC_FRAME)) {
                 d->errStr = "JxlDecoderSubscribeEvents failed";
@@ -406,7 +439,7 @@ QImage JXLDecoderObject::read()
                 d->errStr = "JxlDecoderSetInput failed";
                 return QImage();
             };
-            JxlDecoderCloseInput(d->dec.get());
+            // JxlDecoderCloseInput(d->dec.get());
             if (JXL_DEC_SUCCESS != JxlDecoderSetDecompressBoxes(d->dec.get(), JXL_TRUE)) {
                 d->errStr = "JxlDecoderSetDecompressBoxes failed";
                 return QImage();
@@ -420,15 +453,14 @@ QImage JXLDecoderObject::read()
                 d->errStr = "JxlDecoderSetCoalescing failed";
                 return QImage();
             };
+            const uint32_t numthreads = [&]() {
+                return JxlResizableParallelRunnerSuggestThreads(d->m_info.xsize, d->m_info.ysize);
+            }();
+            JxlResizableParallelRunnerSetThreads(d->runner.get(), numthreads);
             d->readingSet = false;
         }
 
         d->m_rawData.clear();
-
-        const uint32_t numthreads = [&]() {
-            return JxlResizableParallelRunnerSuggestThreads(d->m_info.xsize, d->m_info.ysize);
-        }();
-        JxlResizableParallelRunnerSetThreads(d->runner.get(), numthreads);
 
         for(;;) {
 #ifdef JXL_DECODER_QDEBUG
@@ -443,8 +475,22 @@ QImage JXLDecoderObject::read()
                 d->errStr = "Decoder error";
                 return QImage();
             } else if (status == JXL_DEC_NEED_MORE_INPUT) {
-                d->errStr = "Error, already provided all input";
-                return QImage();
+                if (d->jxlFile.atEnd()) {
+                    d->jxlFile.close();
+                    JxlDecoderCloseInput(d->dec.get());
+                    JxlDecoderReleaseInput(d->dec.get());
+                    d->errStr = "Error, already provided all input";
+                    return QImage();
+                }
+                JxlDecoderReleaseInput(d->dec.get());
+                d->jxlRawInputData = d->jxlFile.read(FRAME_FILE_CHUNK_SIZE);
+                if (JXL_DEC_SUCCESS
+                    != JxlDecoderSetInput(d->dec.get(),
+                                          reinterpret_cast<const uint8_t *>(d->jxlRawInputData.constData()),
+                                          static_cast<size_t>(d->jxlRawInputData.size()))) {
+                    d->errStr = "JxlDecoderSetInput failed";
+                    return QImage();
+                };
             }  else if (status == JXL_DEC_NEED_IMAGE_OUT_BUFFER) {
                 size_t rawSize = 0;
                 if (JXL_DEC_SUCCESS != JxlDecoderImageOutBufferSize(d->dec.get(), &d->m_pixelFormat, &rawSize)) {
@@ -483,6 +529,8 @@ QImage JXLDecoderObject::read()
                     break;
                 }
             } else if (status == JXL_DEC_SUCCESS && d->isLast) {
+                d->jxlFile.close();
+                JxlDecoderCloseInput(d->dec.get());
                 JxlDecoderReleaseInput(d->dec.get());
                 break;
             }
@@ -532,6 +580,11 @@ QString JXLDecoderObject::getFrameName() const
 QString JXLDecoderObject::errorString() const
 {
     if (!d->isJxl) {
+        if (d->jxlFile.isOpen()) {
+            if (d->jxlFile.isOpen()) {
+                d->jxlFile.close();
+            };
+        }
         return d->reader.errorString();
     } else if (d->isJxl) {
         return d->errStr;

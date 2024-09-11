@@ -541,23 +541,28 @@ QImage JXLDecoderObject::read()
                                static_cast<int>(d->m_header.layer_info.xsize),
                                static_cast<int>(d->m_header.layer_info.ysize));
 
-        QImage buff(d->currentRect.width(), d->currentRect.height(), QImage::Format_RGBA8888);
-        switch (d->params.bitDepth) {
-        case ENC_BIT_8:
-            buff.convertTo(QImage::Format_RGBA8888);
-            break;
-        case ENC_BIT_16:
-            buff.convertTo(QImage::Format_RGBA64);
-            break;
-        case ENC_BIT_16F:
-            buff.convertTo(QImage::Format_RGBA16FPx4);
-            break;
-        case ENC_BIT_32F:
-            buff.convertTo(QImage::Format_RGBA32FPx4);
-            break;
-        default:
-            break;
-        }
+        const QImage::Format fmt = [&]() {
+            switch (d->params.bitDepth) {
+            case ENC_BIT_8:
+                return QImage::Format_RGBA8888;
+                break;
+            case ENC_BIT_16:
+                return QImage::Format_RGBA64;
+                break;
+            case ENC_BIT_16F:
+                return QImage::Format_RGBA16FPx4;
+                break;
+            case ENC_BIT_32F:
+                return QImage::Format_RGBA32FPx4;
+                break;
+            default:
+                break;
+            }
+            return QImage::Format_RGBA8888;
+        }();
+
+        QImage buff(d->currentRect.width(), d->currentRect.height(), fmt);
+
         buff.setColorSpace(QColorSpace::fromIccProfile(d->rootICC));
         memcpy(buff.bits(), d->m_rawData.constData(), d->m_rawData.size());
         d->m_rawData.clear();

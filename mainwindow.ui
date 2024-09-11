@@ -404,7 +404,7 @@
                <number>1</number>
               </property>
               <property name="maximum">
-               <number>120</number>
+               <number>999999</number>
               </property>
              </widget>
             </item>
@@ -421,7 +421,7 @@
                <number>1</number>
               </property>
               <property name="maximum">
-               <number>120</number>
+               <number>999999</number>
               </property>
              </widget>
             </item>

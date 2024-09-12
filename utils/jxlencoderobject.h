@@ -31,6 +31,7 @@ protected:
 
 signals:
     void sigStatusText(const QString &status);
+    void sigSpeedStats(const QString &status);
     void sigCurrentMainProgressBar(const int &progress, const bool &success);
     void sigCurrentSubProgressBar(const int &progress);
     void sigEnableSubProgressBar(const bool &enabled, const int &setMax);

@@ -4,6 +4,7 @@
 #include <QColorSpace>
 #include <QImageReader>
 #include <QFileInfo>
+#include <QElapsedTimer>
 
 #include <jxl/color_encoding.h>
 #include <jxl/encode_cxx.h>
@@ -24,6 +25,11 @@ public:
     int rootHeight{0};
     QSize rootSize{};
     QByteArray rootICC{};
+
+    QElapsedTimer elt;
+    quint64 totalFramesProcessed{0};
+    double totalAccumulatedMpps{0.0};
+    double totalAccumulatedDecMpps{0.0};
 
     jxfrstch::EncodeParams params{};
     QVector<jxfrstch::InputFileData> idat{};
@@ -59,6 +65,10 @@ bool JXLEncoderObject::resetEncoder()
     d->encodeAbort = false;
     d->abortCompleteFile = true;
     d->idat.clear();
+    d->totalFramesProcessed = 0;
+    d->totalAccumulatedMpps = 0.0;
+    d->totalAccumulatedDecMpps = 0.0;
+    d->elt.invalidate();
 
     if (!d->enc || !d->runner) {
         return false;
@@ -373,6 +383,7 @@ bool JXLEncoderObject::doEncode()
 
     const int framenum = d->idat.size();
     JXLDecoderObject reader;
+    reader.resetJxlDecoder();
     reader.setEncodeParams(d->params);
 
     for (int i = 0; i < framenum; i++) {
@@ -396,6 +407,7 @@ bool JXLEncoderObject::doEncode()
         if (isImageAnim || reader.imageCount() > 1) {
             emit sigEnableSubProgressBar(true, reader.imageCount());
         }
+
         while (reader.canRead()) {
             int frameXPos = 0;
             int frameYPos = 0;
@@ -408,6 +420,7 @@ bool JXLEncoderObject::doEncode()
             bool needCrop = false;
             QSize frameSize;
             size_t frameResolution;
+            d->elt.start();
             {
                 QImage currentFrame(reader.read());
                 const QRect currentFrameRect = reader.currentImageRect();
@@ -581,6 +594,8 @@ bool JXLEncoderObject::doEncode()
                 //                              QString::number(ind.frameName.toUtf8().size())));
             }
 
+            const qint64 decodeNs = d->elt.nsecsElapsed();
+
             if (JxlEncoderAddImageFrame(frameSettings, &pixelFormat, imagerawdata.constData(), imagerawdata.size())
                 != JXL_ENC_SUCCESS) {
                 emit sigThrowError("JxlEncoderAddImageFrame failed!");
@@ -621,6 +636,8 @@ bool JXLEncoderObject::doEncode()
                                             isMb ? "MiB" : "KiB"));
             }
 
+            d->totalFramesProcessed++;
+
             if (d->encodeAbort && d->abortCompleteFile) {
                 JxlEncoderCloseInput(d->enc.get());
                 JxlEncoderFlushInput(d->enc.get());
@@ -642,6 +659,10 @@ bool JXLEncoderObject::doEncode()
 #ifdef USE_STREAMING_OUTPUT
                 emit sigStatusText(QString("Encode aborted! Outputting partial image | Final output file size: %1 %2")
                                        .arg(QString::number(finalAbortImageSizeKiB), isMb ? "MiB" : "KiB"));
+                emit sigSpeedStats(QString("%1 frame(s) processed | Dec: %2 MP/s | Enc: %3 MP/s")
+                                       .arg(QString::number(d->totalFramesProcessed),
+                                            QString::number(d->totalAccumulatedDecMpps / static_cast<double>(d->totalFramesProcessed), 'g', 4),
+                                            QString::number(d->totalAccumulatedMpps / static_cast<double>(d->totalFramesProcessed), 'g', 4)));
                 d->isAborted = true;
                 return false;
 #else
@@ -657,11 +678,41 @@ bool JXLEncoderObject::doEncode()
 #ifdef USE_STREAMING_OUTPUT
             JxlEncoderFlushInput(d->enc.get());
 #endif
+            const qint64 encodeNs = d->elt.nsecsElapsed() - decodeNs;
+            const double decNstoSec = static_cast<double>(decodeNs) / 1.0e9;
+            const double encNstoSec = static_cast<double>(encodeNs) / 1.0e9;
+
+            const double decmpps = [&]() {
+                if (d->elt.isValid() && decNstoSec > 0) {
+                    const int frameres = frameResolution;
+                    return static_cast<double>((static_cast<double>(frameResolution) / 1000000.0) / decNstoSec);
+                } else {
+                    return 0.0;
+                }
+            }();
+
+            const double mpps = [&]() {
+                if (d->elt.isValid() && encNstoSec > 0) {
+                    const int frameres = frameResolution;
+                    return static_cast<double>((static_cast<double>(frameResolution) / 1000000.0) / encNstoSec);
+                } else {
+                    return 0.0;
+                }
+            }();
+
+            d->totalAccumulatedMpps += mpps;
+            d->totalAccumulatedDecMpps += decmpps;
+
+            emit sigSpeedStats(QString("Dec: %1 MP/s | Enc: %2 MP/s")
+                                   .arg(QString::number(decmpps, 'g', 4), QString::number(mpps, 'g', 4)));
+
             imageframenum++;
         }
         emit sigCurrentMainProgressBar(i + 1, true);
         emit sigEnableSubProgressBar(false, 0);
     }
+
+    d->elt.invalidate();
 
 #ifndef USE_STREAMING_OUTPUT
     QFile outF(d->params.outputFileName);
@@ -726,6 +777,10 @@ bool JXLEncoderObject::doEncode()
 
     emit sigStatusText(
         QString("Encode successful | Final output file size: %1 %2").arg(QString::number(finalImageSizeKiB), isMb ? "MiB" : "KiB"));
+    emit sigSpeedStats(QString("%1 frame(s) processed | Dec: %2 MP/s | Enc: %3 MP/s")
+                           .arg(QString::number(d->totalFramesProcessed),
+                                QString::number(d->totalAccumulatedDecMpps / static_cast<double>(d->totalFramesProcessed), 'g', 4),
+                                QString::number(d->totalAccumulatedMpps / static_cast<double>(d->totalFramesProcessed), 'g', 4)));
     d->isAborted = false;
     return true;
 }

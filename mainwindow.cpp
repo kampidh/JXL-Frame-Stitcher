@@ -255,6 +255,9 @@ MainWindow::MainWindow(QWidget *parent)
     connect(d->encObj.get(), &JXLEncoderObject::sigCurrentSubProgressBar, this, [&](const int &progress) {
         ui->progressBarSub->setValue(progress);
     });
+    connect(d->encObj.get(), &JXLEncoderObject::sigSpeedStats, this, [&](const QString &status) {
+        d->statLabel->setText(status);
+    });
     connect(d->encObj.get(), &JXLEncoderObject::finished, this, [&]() {
         ui->encodeBtn->setText("Encode");
         ui->menuBar->setEnabled(true);

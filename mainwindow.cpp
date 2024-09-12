@@ -337,6 +337,21 @@ void MainWindow::dropEvent(QDropEvent *event)
     if (event->mimeData()->hasUrls()) {
         QFileInfo finfo(event->mimeData()->urls().at(0).toLocalFile());
         if (finfo.isFile() && finfo.suffix().toLower() == "frstch") {
+            if (d->isUnsavedChanges) {
+                const auto res = QMessageBox::warning(this,
+                                                      "Warning",
+                                                      "You have unsaved changes! Would you like to save before making changes?",
+                                                      QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
+                if (res == QMessageBox::Yes) {
+                    if (!saveConfig()) {
+                        return;
+                    }
+                } else if (res == QMessageBox::No) {
+                    d->isUnsavedChanges = false;
+                } else if (res == QMessageBox::Cancel) {
+                    return;
+                }
+            }
             openConfig(finfo.absoluteFilePath());
         } else if (finfo.isFile() || event->mimeData()->urls().count() > 1) {
             QStringList fileList;
@@ -637,16 +652,6 @@ bool MainWindow::saveConfig()
 
 void MainWindow::openConfig()
 {
-    const QString tmpfn =
-        QFileDialog::getOpenFileName(this, "Open setting", QDir::currentPath(), "Frame Stitch Config (*.frstch)");
-    if (tmpfn.isEmpty()) {
-        return;
-    }
-    openConfig(tmpfn);
-}
-
-void MainWindow::openConfig(const QString &tmpfn)
-{
     if (d->isUnsavedChanges) {
         const auto res = QMessageBox::warning(this,
                                               "Warning",
@@ -656,13 +661,22 @@ void MainWindow::openConfig(const QString &tmpfn)
             if (!saveConfig()) {
                 return;
             }
-        } else if (res == QMessageBox::No) {
-            d->isUnsavedChanges = false;
         } else if (res == QMessageBox::Cancel) {
             return;
         }
     }
 
+    const QString tmpfn =
+        QFileDialog::getOpenFileName(this, "Open setting", QDir::currentPath(), "Frame Stitch Config (*.frstch)");
+    if (tmpfn.isEmpty()) {
+        return;
+    }
+    d->isUnsavedChanges = false;
+    openConfig(tmpfn);
+}
+
+void MainWindow::openConfig(const QString &tmpfn)
+{
     QByteArray binsave;
     if (!tmpfn.isEmpty()) {
         QFile outF(tmpfn);

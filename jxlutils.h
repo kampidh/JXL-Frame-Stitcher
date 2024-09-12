@@ -199,6 +199,8 @@ struct InputFileData {
 struct EncodeParams {
     double distance{0.0};
     double frameTimeMs{0.0};
+    double photonNoise{0.0};
+    float autoCropFuzzyComparison{0.0};
 
     int effort{1};
     int numerator{1};
@@ -214,6 +216,7 @@ struct EncodeParams {
     bool premulAlpha{false};
     bool lossyModular{false};
     bool coalesceJxlInput{false};
+    bool autoCropFrame{true};
 
     QString outputFileName{};
 };
@@ -280,6 +283,8 @@ static constexpr char basicUsage[] = {
 <li><b>Alpha channel</b>: if checked, output JXL will also save alpha channel</li>
 <li><b>Alpha lossless</b>: if checked, alpha channel will set as lossless regardless of distance setting</li>
 <li><b>Alpha premultiply</b>: sets the alpha premultiply flag on libjxl</li>
+<li><b>Photon noise</b>: sets the ISO noise on encode</li>
+<li><b>Auto crop</b>: enables automatic frame cropping on animated input, set the color difference threshold with the spin box. Take note that enabling this will also explicitly enable JXL coalescing on input</li>
 </ul>
 </body></html>
 )"};

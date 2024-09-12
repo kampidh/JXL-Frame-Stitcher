@@ -307,6 +307,9 @@ void MainWindow::resetApp()
     ui->outFileLineEdit->clear();
     ui->statusBar->showMessage("Import image frames by drag and dropping into the file list or pressing Add Files...");
     ui->progressBar->hide();
+    ui->photonNoiseSpn->setValue(0.0);
+    ui->autoCropChk->setChecked(false);
+    ui->autoCropTreshSpn->setValue(0.0);
 }
 
 void MainWindow::setUnsaved()
@@ -606,6 +609,9 @@ bool MainWindow::saveConfigAs(bool forceDialog)
     sets["numLoops"] = ui->loopsSpinBox->value();
     sets["useAnimation"] = ui->isAnimatedBox->isChecked();
     sets["colorSpace"] = ui->colorSpaceCmb->currentIndex();
+    sets["photonNoise"] = ui->photonNoiseSpn->value();
+    sets["autoCrop"] = ui->autoCropChk->isChecked();
+    sets["autoCropThr"] = ui->autoCropTreshSpn->value();
     sets["fileList"] = files;
 
     const QByteArray binsave = QCborValue::fromJsonValue(sets).toCbor();
@@ -709,6 +715,9 @@ void MainWindow::openConfig(const QString &tmpfn)
         const int numLoops = loadjs.value("numLoops").toInt(0);
         const bool useAnimation = loadjs.value("useAnimation").toBool(true);
         const int colorSpace = loadjs.value("colorSpace").toInt(0);
+        const double photonNoise = loadjs.value("photonNoise").toDouble(0.0);
+        const bool autoCrop = loadjs.value("autoCrop").toBool(false);
+        const double autoCropThr = loadjs.value("autoCropThr").toDouble(0.0);
 
         ui->alphaEnableChk->setChecked(useAlpha);
         ui->alphaPremulChk->setChecked(usePremulAlpha);
@@ -721,6 +730,9 @@ void MainWindow::openConfig(const QString &tmpfn)
         ui->loopsSpinBox->setValue(numLoops);
         ui->isAnimatedBox->setChecked(useAnimation);
         ui->colorSpaceCmb->setCurrentIndex(colorSpace);
+        ui->photonNoiseSpn->setValue(photonNoise);
+        ui->autoCropChk->setChecked(autoCrop);
+        ui->autoCropTreshSpn->setValue(autoCropThr);
 
         if (loadjs.value("fileList").isArray()) {
             const QJsonArray farray = loadjs.value("fileList").toArray();
@@ -894,7 +906,10 @@ void MainWindow::doEncode()
     params.lossyModular = ui->modularLossyChk->isChecked();
     params.frameTimeMs = (static_cast<double>(denominator * 1000) / static_cast<double>(numerator));
     params.outputFileName = ui->outFileLineEdit->text();
-    params.coalesceJxlInput = ui->actionCoalesce_JXL_input->isChecked();
+    params.photonNoise = ui->photonNoiseSpn->value();
+    params.autoCropFrame = params.animation ? ui->autoCropChk->isChecked() : false;
+    params.autoCropFuzzyComparison = ui->autoCropTreshSpn->value();
+    params.coalesceJxlInput = ui->autoCropChk ? true : ui->actionCoalesce_JXL_input->isChecked();
 
     if (encEffort > 10) {
         const auto diag = QMessageBox::warning(this,

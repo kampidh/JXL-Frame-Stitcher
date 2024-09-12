@@ -2,9 +2,9 @@
 #include "jxldecoderobject.h"
 
 #include <QColorSpace>
-#include <QImageReader>
-#include <QFileInfo>
 #include <QElapsedTimer>
+#include <QFileInfo>
+#include <QImageReader>
 
 #include <jxl/color_encoding.h>
 #include <jxl/encode_cxx.h>
@@ -25,6 +25,8 @@ public:
     int rootHeight{0};
     QSize rootSize{};
     QByteArray rootICC{};
+
+    QImage prevFrame;
 
     QElapsedTimer elt;
     quint64 totalFramesProcessed{0};
@@ -68,6 +70,7 @@ bool JXLEncoderObject::resetEncoder()
     d->totalFramesProcessed = 0;
     d->totalAccumulatedMpps = 0.0;
     d->totalAccumulatedDecMpps = 0.0;
+    d->prevFrame = QImage();
     d->elt.invalidate();
 
     if (!d->enc || !d->runner) {
@@ -377,6 +380,18 @@ bool JXLEncoderObject::doEncode()
             d->isAborted = true;
             return false;
         }
+
+        if (d->params.photonNoise > 0.0) {
+            if (JxlEncoderFrameSettingsSetFloatOption(frameSettings,
+                                                      JXL_ENC_FRAME_SETTING_PHOTON_NOISE,
+                                                      static_cast<float>(d->params.photonNoise))
+                != JXL_ENC_SUCCESS) {
+                qDebug() << "JxlEncoderFrameSettingsSetFloatOption photon noise failed";
+                emit sigThrowError("JxlEncoderFrameSettings photon noise failed!");
+                d->isAborted = true;
+                return false;
+            }
+        }
     }
 
     auto frameHeader = std::make_unique<JxlFrameHeader>();
@@ -386,6 +401,7 @@ bool JXLEncoderObject::doEncode()
     reader.resetJxlDecoder();
     reader.setEncodeParams(d->params);
 
+    bool acResetFrame = true;
     for (int i = 0; i < framenum; i++) {
         if (d->encodeAbort && !d->abortCompleteFile) {
             emit sigCurrentMainProgressBar(i, true);
@@ -423,19 +439,104 @@ bool JXLEncoderObject::doEncode()
             d->elt.start();
             {
                 QImage currentFrame(reader.read());
-                const QRect currentFrameRect = reader.currentImageRect();
+                QRect currentFrameRect = reader.currentImageRect();
+                if (!currentFrameRect.isValid()) {
+                    currentFrameRect = currentFrame.rect();
+                }
 
                 if (currentFrame.isNull()) {
                     emit sigThrowError(reader.errorString());
                     d->isAborted = true;
                     return false;
                 }
+
+                if (d->params.autoCropFrame) {
+                    if ((isImageAnim && imageframenum == 0) || (!isImageAnim && i == 0)) {
+                        acResetFrame = true;
+                        d->prevFrame = currentFrame;
+                    } else {
+                        /* In short:
+                         * Compare 2 QImages and get a QRect where they have differences
+                         */
+                        QRect cropRect;
+                        if (d->prevFrame.size() == currentFrame.size()
+                            && d->prevFrame.sizeInBytes() == currentFrame.sizeInBytes()) {
+                            QPoint topLeft(currentFrameRect.bottomRight());
+                            QPoint bottomRight(0, 0);
+
+                            for (int h = 0; h < currentFrame.height(); h++) {
+                                for (int w = 0; w < currentFrame.width(); w++) {
+                                    const QPoint cpos(w, h);
+                                    const QColor currentPix = currentFrame.pixelColor(cpos);
+                                    const QColor prevPix = d->prevFrame.pixelColor(cpos);
+                                    const float fuzzycomparison = d->params.autoCropFuzzyComparison;
+                                    const bool fuzzy = [&]() {
+                                        if (fuzzycomparison > 0.0) {
+                                            if (qAbs(currentPix.redF() - prevPix.redF()) > fuzzycomparison)
+                                                return true;
+                                            if (qAbs(currentPix.greenF() - prevPix.greenF()) > fuzzycomparison)
+                                                return true;
+                                            if (qAbs(currentPix.blueF() - prevPix.blueF()) > fuzzycomparison)
+                                                return true;
+                                            if (qAbs(currentPix.alphaF() - prevPix.alphaF()) > fuzzycomparison)
+                                                return true;
+                                            return false;
+                                        } else {
+                                            return currentPix != prevPix;
+                                        }
+                                    }();
+
+                                    if (fuzzy) {
+                                        topLeft.setX(qMin(w, topLeft.x()));
+                                        topLeft.setY(qMin(h, topLeft.y()));
+                                        bottomRight.setX(qMax(w, bottomRight.x()));
+                                        bottomRight.setY(qMax(h, bottomRight.y()));
+                                    }
+                                }
+                            }
+
+                            if ((topLeft.x() >= currentFrame.width() - 1 || topLeft.y() >= currentFrame.height() - 1)
+                                || (bottomRight.x() < 1 || bottomRight.y() < 1)) {
+                                cropRect = QRect(0, 0, 1, 1);
+                            } else {
+                                cropRect = QRect(topLeft.x(),
+                                                 topLeft.y(),
+                                                 bottomRight.x() - topLeft.x() + 1,
+                                                 bottomRight.y() - topLeft.y() + 1);
+                            }
+
+                            if (cropRect != QRect(0, 0, currentFrame.width(), currentFrame.height())) {
+                                acResetFrame = false;
+                                if (cropRect != QRect(0, 0, 1, 1)) {
+                                    currentFrame = currentFrame.copy(cropRect);
+                                } else {
+                                    /* Fill with single, offscreen transparent pixel if no movement is detected
+                                     * Ideally this frame should be skipped and the frame before should be set
+                                     * with the correct tick (1+n of skipped frames)
+                                     */
+                                    currentFrame = QImage(1, 1, currentFrame.format());
+                                    currentFrame.fill(Qt::transparent);
+                                    topLeft = QPoint(-1, -1);
+                                }
+                                const QPoint absTopLeft = currentFrameRect.topLeft() + topLeft;
+                                currentFrameRect = currentFrame.rect();
+                                currentFrameRect.moveTopLeft(absTopLeft);
+                            } else {
+                                acResetFrame = true;
+                                d->prevFrame = currentFrame;
+                            }
+                        } else {
+                            acResetFrame = true;
+                            d->prevFrame = currentFrame;
+                        }
+                    }
+                }
+
                 if ((currentFrame.width() != d->rootSize.width() || currentFrame.height() != d->rootSize.height())
                     || ((frameXPos != 0 || frameYPos != 0) && i > 0)) {
                     needCrop = true;
                 }
-
-                if ((currentFrameRect.x() != 0 || currentFrameRect.y() != 0) && imageframenum > 0) {
+                if (((currentFrameRect.x() != 0 || currentFrameRect.y() != 0) && imageframenum > 0) || !acResetFrame) {
                     needCrop = true;
                     // offset with set position
                     frameXPos += currentFrameRect.x();
@@ -530,9 +631,14 @@ bool JXLEncoderObject::doEncode()
             }
 
             const uint16_t frameTick = [&]() {
-                if (!(isImageAnim || reader.imageCount() > 0) || !reader.canRead()) { // can't read == end of animation or just a single frame
-                    return ind.frameDuration;
-                } else if (reader.nextImageDelay() == 0) {
+                // what the f-
+                if (!(isImageAnim || reader.imageCount() > 0)
+                    || !reader.canRead()) { // can't read == end of animation or just a single frame
+                    if (isImageAnim) { // if it's end and the image is animated, set to 0
+                        return static_cast<uint16_t>(0);
+                    }
+                    return ind.frameDuration; // otherwise set the frame duration
+                } else if (reader.nextImageDelay() == 0 || !d->params.animation) {
                     return static_cast<uint16_t>(0);
                 } else {
                     return static_cast<uint16_t>(
@@ -541,7 +647,7 @@ bool JXLEncoderObject::doEncode()
             }();
 
             JxlEncoderInitFrameHeader(frameHeader.get());
-            frameHeader->duration = (d->params.animation) ? frameTick : 0;
+            frameHeader->duration = frameTick;
             frameHeader->layer_info.save_as_reference = static_cast<uint32_t>(ind.isRefFrame);
             frameHeader->layer_info.blend_info.blendmode = ind.blendMode;
             if (d->params.alpha) {
@@ -569,6 +675,16 @@ bool JXLEncoderObject::doEncode()
                     if (frameName.toUtf8().size() > 1071) {
                         frameName.truncate(1071);
                     }
+                }
+            }
+
+            if (d->params.autoCropFrame) {
+                if (acResetFrame) {
+                    frameHeader->layer_info.save_as_reference = 1;
+                }
+                if (needCrop && !acResetFrame) {
+                    frameHeader->layer_info.blend_info.blendmode = JXL_BLEND_BLEND;
+                    frameHeader->layer_info.blend_info.source = 1;
                 }
             }
 
@@ -626,7 +742,7 @@ bool JXLEncoderObject::doEncode()
                                             QString::number(imageframenum + 1),
                                             QString::number(reader.imageCount()),
                                             QString::number(currentImageSizeKiB),
-                                            isMb ? "MiB":"KiB"));
+                                            isMb ? "MiB" : "KiB"));
                 emit sigCurrentSubProgressBar(imageframenum + 1);
             } else {
                 emit sigStatusText(QString("Processing frame %1 of %2 | Output file size: %3 %4")
@@ -659,10 +775,15 @@ bool JXLEncoderObject::doEncode()
 #ifdef USE_STREAMING_OUTPUT
                 emit sigStatusText(QString("Encode aborted! Outputting partial image | Final output file size: %1 %2")
                                        .arg(QString::number(finalAbortImageSizeKiB), isMb ? "MiB" : "KiB"));
-                emit sigSpeedStats(QString("%1 frame(s) processed | Dec: %2 MP/s | Enc: %3 MP/s")
-                                       .arg(QString::number(d->totalFramesProcessed),
-                                            QString::number(d->totalAccumulatedDecMpps / static_cast<double>(d->totalFramesProcessed), 'g', 4),
-                                            QString::number(d->totalAccumulatedMpps / static_cast<double>(d->totalFramesProcessed), 'g', 4)));
+                emit sigSpeedStats(
+                    QString("%1 frame(s) processed | Dec: %2 MP/s | Enc: %3 MP/s")
+                        .arg(QString::number(d->totalFramesProcessed),
+                             QString::number(d->totalAccumulatedDecMpps / static_cast<double>(d->totalFramesProcessed),
+                                             'g',
+                                             4),
+                             QString::number(d->totalAccumulatedMpps / static_cast<double>(d->totalFramesProcessed),
+                                             'g',
+                                             4)));
                 d->isAborted = true;
                 return false;
 #else
@@ -768,19 +889,20 @@ bool JXLEncoderObject::doEncode()
             return static_cast<double>(QFileInfo(d->params.outputFileName).size()) / 1024.0 / 1024.0;
         } else {
             isMb = false;
-            return static_cast<double>(QFileInfo(d->params.outputFileName).size()n) / 1024.0;
+            return static_cast<double>(QFileInfo(d->params.outputFileName).size()) / 1024.0;
         }
 #endif
     }();
 
     d->idat.clear();
 
-    emit sigStatusText(
-        QString("Encode successful | Final output file size: %1 %2").arg(QString::number(finalImageSizeKiB), isMb ? "MiB" : "KiB"));
-    emit sigSpeedStats(QString("%1 frame(s) processed | Dec: %2 MP/s | Enc: %3 MP/s")
-                           .arg(QString::number(d->totalFramesProcessed),
-                                QString::number(d->totalAccumulatedDecMpps / static_cast<double>(d->totalFramesProcessed), 'g', 4),
-                                QString::number(d->totalAccumulatedMpps / static_cast<double>(d->totalFramesProcessed), 'g', 4)));
+    emit sigStatusText(QString("Encode successful | Final output file size: %1 %2")
+                           .arg(QString::number(finalImageSizeKiB), isMb ? "MiB" : "KiB"));
+    emit sigSpeedStats(
+        QString("%1 frame(s) processed | Dec: %2 MP/s | Enc: %3 MP/s")
+            .arg(QString::number(d->totalFramesProcessed),
+                 QString::number(d->totalAccumulatedDecMpps / static_cast<double>(d->totalFramesProcessed), 'g', 4),
+                 QString::number(d->totalAccumulatedMpps / static_cast<double>(d->totalFramesProcessed), 'g', 4)));
     d->isAborted = false;
     return true;
 }

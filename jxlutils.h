@@ -75,6 +75,13 @@ struct JxlOutputProcessor {
                                          METHOD_TO_C_CALLBACK(&JxlOutputProcessor::ReleaseBuffer),
                                          METHOD_TO_C_CALLBACK(&JxlOutputProcessor::Seek),
                                          METHOD_TO_C_CALLBACK(&JxlOutputProcessor::SetFinalizedPosition)};
+
+        // Non-macro version for personal references, see definitions below
+        // return JxlEncoderOutputProcessor{this,
+        //                                  GetBufferOpaque,
+        //                                  ReleaseBufferOpaque,
+        //                                  SeekOpaque,
+        //                                  SetFinalizedPositionOpaque};
     }
 
     void *GetBuffer(size_t *size)
@@ -111,6 +118,51 @@ struct JxlOutputProcessor {
     {
         this->finalized_position = finalized_position;
     }
+
+    /*
+     * Static callback functions, not really used, just for my own references
+     * as I slowly understand the callback method...
+     */
+    /*
+    static void *GetBufferOpaque(void *opaque, size_t *size)
+    {
+        JxlOutputProcessor *self = reinterpret_cast<JxlOutputProcessor *>(opaque);
+        *size = std::min<size_t>(*size, 1u << 16);
+        if (self->output.size() < *size) {
+            self->output.resize(*size);
+        }
+        return self->output.data();
+    }
+
+    static void ReleaseBufferOpaque(void *opaque, size_t written_bytes)
+    {
+        JxlOutputProcessor *self = reinterpret_cast<JxlOutputProcessor *>(opaque);
+        if (self->outFile.isOpen()) {
+            if (self->outFile.write(reinterpret_cast<const char *>(self->output.data()), written_bytes) != written_bytes) {
+                qWarning() << "Failed to write" << written_bytes << "bytes to output";
+            }
+        } else {
+            qWarning() << "ReleaseBuffer failed, file not open";
+        }
+        self->output.clear();
+    }
+
+    static void SeekOpaque(void *opaque, uint64_t position)
+    {
+        JxlOutputProcessor *self = reinterpret_cast<JxlOutputProcessor *>(opaque);
+        if (self->outFile.isOpen()) {
+            self->outFile.seek(position);
+        } else {
+            qWarning() << "Seek failed, file not open";
+        }
+    }
+
+    static void SetFinalizedPositionOpaque(void *opaque, uint64_t finalized_position)
+    {
+        JxlOutputProcessor *self = reinterpret_cast<JxlOutputProcessor *>(opaque);
+        self->finalized_position = finalized_position;
+    }
+    */
 
     QFile outFile;
     QByteArray output;

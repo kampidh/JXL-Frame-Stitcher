@@ -83,9 +83,6 @@ void JXLDecoderObject::setFileName(const QString &inputFilename)
     const QFileInfo fi(d->inputFileName);
     d->inputFileSuffix = fi.suffix().toLower();
 
-    d->jxlRawInputData.clear();
-    d->m_rawData.clear();
-
     // some files can trigger infinite loop when calling canRead()...
     d->oneShotSuffixes = QStringList{
         "tif",
@@ -93,37 +90,46 @@ void JXLDecoderObject::setFileName(const QString &inputFilename)
     };
 
     if (d->inputFileSuffix == "jxl") {
-        d->jxlFile.setFileName(inputFilename);
         d->isJxl = true;
-        if (!d->dec)
-            d->dec = JxlDecoderMake(nullptr);
-        if (!d->runner)
-            d->runner = JxlResizableParallelRunnerMake(nullptr);
-
-        JxlDecoderReset(d->dec.get());
-        d->isCMYK = false;
-        d->jxlHasAnim = false;
-        d->isLast = false;
-        d->readingSet = false;
-        d->oneShotDecode = false;
-        d->frameDurationMs = 0.0;
-        d->rootWidth = 0;
-        d->rootHeight = 0;
-        d->numFrames = 0;
-        d->rootSize = QSize();
-        d->rootICC.clear();
-        d->currentRect = QRect();
-        d->errStr = QString();
-        d->frameName = QString();
+        resetJxlDecoder();
+        d->jxlFile.setFileName(inputFilename);
 
         d->isDecodeable = decodeJxlMetadata();
-        if (d->jxlFile.isOpen()) {
-            d->jxlFile.close();
-        };
     } else {
         d->reader.setFileName(inputFilename);
         d->isJxl = false;
     }
+}
+
+void JXLDecoderObject::resetJxlDecoder()
+{
+    if (d->jxlFile.isOpen()) {
+        d->jxlFile.close();
+    };
+    if (!d->dec)
+        d->dec = JxlDecoderMake(nullptr);
+    if (!d->runner)
+        d->runner = JxlResizableParallelRunnerMake(nullptr);
+
+    JxlDecoderReset(d->dec.get());
+
+    d->isCMYK = false;
+    d->jxlHasAnim = false;
+    d->isLast = false;
+    d->readingSet = false;
+    d->oneShotDecode = false;
+    d->frameDurationMs = 0.0;
+    d->rootWidth = 0;
+    d->rootHeight = 0;
+    d->numFrames = 0;
+    d->rootSize = QSize();
+    d->currentRect = QRect();
+    d->errStr = QString();
+    d->frameName = QString();
+
+    d->rootICC.clear();
+    d->jxlRawInputData.clear();
+    d->m_rawData.clear();
 }
 
 bool JXLDecoderObject::isJxl()
@@ -462,6 +468,7 @@ QImage JXLDecoderObject::read()
 
         d->m_rawData.clear();
 
+        bool decodeSuccess = false;
         for(;;) {
 #ifdef JXL_DECODER_QDEBUG
             qDebug() << "---";
@@ -473,14 +480,14 @@ QImage JXLDecoderObject::read()
 
             if (status == JXL_DEC_ERROR) {
                 d->errStr = "Decoder error";
-                return QImage();
+                break;
             } else if (status == JXL_DEC_NEED_MORE_INPUT) {
                 if (d->jxlFile.atEnd()) {
                     d->jxlFile.close();
                     JxlDecoderCloseInput(d->dec.get());
                     JxlDecoderReleaseInput(d->dec.get());
                     d->errStr = "Error, already provided all input";
-                    return QImage();
+                    break;
                 }
                 JxlDecoderReleaseInput(d->dec.get());
                 d->jxlRawInputData = d->jxlFile.read(FRAME_FILE_CHUNK_SIZE);
@@ -489,13 +496,13 @@ QImage JXLDecoderObject::read()
                                           reinterpret_cast<const uint8_t *>(d->jxlRawInputData.constData()),
                                           static_cast<size_t>(d->jxlRawInputData.size()))) {
                     d->errStr = "JxlDecoderSetInput failed";
-                    return QImage();
+                    break;
                 };
             }  else if (status == JXL_DEC_NEED_IMAGE_OUT_BUFFER) {
                 size_t rawSize = 0;
                 if (JXL_DEC_SUCCESS != JxlDecoderImageOutBufferSize(d->dec.get(), &d->m_pixelFormat, &rawSize)) {
                     d->errStr = "JxlDecoderImageOutBufferSize failed";
-                    return QImage();
+                    break;
                 }
                 d->m_rawData.resize(static_cast<int>(rawSize));
                 if (JXL_DEC_SUCCESS
@@ -504,12 +511,12 @@ QImage JXLDecoderObject::read()
                                                    reinterpret_cast<uint8_t *>(d->m_rawData.data()),
                                                    static_cast<size_t>(d->m_rawData.size()))) {
                     d->errStr = "JxlDecoderSetImageOutBuffer failed";
-                    return QImage();
+                    break;
                 }
             } else if (status == JXL_DEC_FRAME) {
                 if (JXL_DEC_SUCCESS != JxlDecoderGetFrameHeader(d->dec.get(), &d->m_header)) {
                     d->errStr = "JxlDecoderGetFrameHeader failed";
-                    return QImage();
+                    break;
                 }
                 d->isLast = (d->m_header.is_last == JXL_TRUE);
 
@@ -518,7 +525,7 @@ QImage JXLDecoderObject::read()
                     QByteArray rawFrameName(nameLength, 0x0);
                     if (JXL_DEC_SUCCESS != JxlDecoderGetFrameName(d->dec.get(), rawFrameName.data(), nameLength)) {
                         d->errStr = "JxlDecoderGetFrameName failed";
-                        return QImage();
+                        break;
                     }
                     d->frameName = QString::fromUtf8(rawFrameName);
                 } else {
@@ -526,14 +533,23 @@ QImage JXLDecoderObject::read()
                 }
             } else if (status == JXL_DEC_FULL_IMAGE) {
                 if (!d->isLast) {
+                    decodeSuccess = true;
                     break;
                 }
             } else if (status == JXL_DEC_SUCCESS && d->isLast) {
                 d->jxlFile.close();
                 JxlDecoderCloseInput(d->dec.get());
                 JxlDecoderReleaseInput(d->dec.get());
+                decodeSuccess = true;
                 break;
             }
+        }
+
+        if (!decodeSuccess) {
+            d->jxlFile.close();
+            JxlDecoderCloseInput(d->dec.get());
+            JxlDecoderReleaseInput(d->dec.get());
+            return QImage();
         }
 
         d->currentRect = QRect(static_cast<int>(d->m_header.layer_info.crop_x0),

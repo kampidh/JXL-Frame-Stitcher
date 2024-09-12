@@ -19,6 +19,7 @@ public:
 
     bool isJxl();
     QImage read();
+    void resetJxlDecoder();
 
     int imageCount() const;
     bool haveAnimation() const;

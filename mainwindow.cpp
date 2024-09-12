@@ -237,7 +237,6 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(d->encObj.get(), &JXLEncoderObject::sigStatusText, this, [&](const QString &status) {
         ui->statusBar->showMessage(status);
-        QGuiApplication::processEvents();
     });
     connect(d->encObj.get(), &JXLEncoderObject::sigThrowError, this, [&](const QString &status) {
         QMessageBox::critical(this, "Error", status);
@@ -248,16 +247,13 @@ MainWindow::MainWindow(QWidget *parent)
         ui->treeWidget->setCurrentItem(selItem);
         selItem->setBackground(0, success ? QColor(128, 255, 255) : QColor(255, 255, 96));
         ui->progressBar->setValue(progress);
-        QGuiApplication::processEvents();
     });
     connect(d->encObj.get(), &JXLEncoderObject::sigEnableSubProgressBar, this, [&](const bool &enabled, const int &setMax) {
         ui->progressBarSub->setVisible(enabled);
         ui->progressBarSub->setMaximum(setMax);
-        QGuiApplication::processEvents();
     });
     connect(d->encObj.get(), &JXLEncoderObject::sigCurrentSubProgressBar, this, [&](const int &progress) {
         ui->progressBarSub->setValue(progress);
-        QGuiApplication::processEvents();
     });
     connect(d->encObj.get(), &JXLEncoderObject::finished, this, [&]() {
         ui->encodeBtn->setText("Encode");

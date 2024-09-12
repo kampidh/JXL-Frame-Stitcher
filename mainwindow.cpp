@@ -86,6 +86,8 @@ public:
     QCollator collator;
     QVector<jxfrstch::InputFileData> inputFileList;
     QScopedPointer<JXLEncoderObject> encObj;
+
+    QScopedPointer<QLabel> statLabel;
 };
 
 MainWindow::MainWindow(QWidget *parent)
@@ -116,6 +118,12 @@ MainWindow::MainWindow(QWidget *parent)
     ui->treeWidget->setColumnWidth(5, 48);
     ui->treeWidget->setColumnWidth(6, 60);
     ui->progressBarSub->hide();
+
+    d->statLabel.reset(new QLabel(this));
+    ui->statusBar->addPermanentWidget(d->statLabel.get());
+
+    d->statLabel->setAlignment(Qt::AlignRight);
+    d->statLabel->clear();
 
     connect(ui->clearFilesBtn, &QPushButton::clicked, this, [&]() {
         ui->statusBar->showMessage(
@@ -478,7 +486,7 @@ void MainWindow::selectingFrames()
         ui->saveAsRefSpn->setEnabled(false);
         ui->selectedFileLabel->setText(QString("%1 files selected").arg(ui->treeWidget->selectedItems().size()));
 
-        ui->saveAsRefSpn->setValue(currentSelItem->data(1, 0).toInt());
+        ui->saveAsRefSpn->setValue(-1);
         ui->frameDurationSpn->setValue(-1);
         ui->frameRefSpinBox->setValue(-1);
         ui->frameXPosSpn->setValue(currentSelItem->data(4, 0).toInt());
@@ -544,8 +552,8 @@ void MainWindow::selectingFrames()
         ui->frameDurationSpn->setEnabled(false);
         ui->saveAsRefSpn->setEnabled(false);
     } else {
-        ui->frameRefSpinBox->setEnabled(ui->saveAsRefSpn->value() == 0);
-        ui->frameDurationSpn->setEnabled(ui->saveAsRefSpn->value() == 0);
+        ui->frameRefSpinBox->setEnabled(ui->saveAsRefSpn->value() <= 0);
+        ui->frameDurationSpn->setEnabled(ui->saveAsRefSpn->value() <= 0);
         ui->saveAsRefSpn->setEnabled(ui->treeWidget->selectedItems().size() == 1);
     }
 }
@@ -769,18 +777,21 @@ void MainWindow::currentFrameSettingChanged()
 
     const auto selItemList = ui->treeWidget->selectedItems();
 
-    const bool changeFrameDur = (ui->frameDurationSpn->value() != -1);
-    const bool changeFrameRef = (ui->frameRefSpinBox->value() != -1);
+    const bool changeFrameDur = (ui->frameDurationSpn->value() >= 0);
+    const bool changeFrameRef = (ui->frameRefSpinBox->value() >= 0);
     const bool changeFrameBlend = (ui->blendModeCmb->currentIndex() != 5);
     const bool changeFrameName = (ui->frameNameLine->text() != "<unchanged>");
+    const bool changeSaveRef = (ui->saveAsRefSpn->value() >= 0);
 
     foreach (const auto &v, selItemList) {
-        if (ui->saveAsRefSpn->value() > 0) {
-            v->setBackground(1, QColor(128, 255, 128));
-        } else {
-            v->setBackground(1, {});
+        if (changeSaveRef) {
+            if (ui->saveAsRefSpn->value() > 0) {
+                v->setBackground(1, QColor(128, 255, 128));
+            } else {
+                v->setBackground(1, {});
+            }
+            v->setData(1, 0, ui->saveAsRefSpn->value());
         }
-        v->setData(1, 0, ui->saveAsRefSpn->value());
         if (changeFrameDur)
             v->setData(2, 0, ui->frameDurationSpn->value());
         if (changeFrameRef)
@@ -843,6 +854,7 @@ void MainWindow::selectOutputFile()
 
 void MainWindow::doEncode()
 {
+    d->statLabel->clear();
     if (ui->treeWidget->topLevelItemCount() == 0 || ui->outFileLineEdit->text().isEmpty()) {
         ui->encodeBtn->setText("Encode");
         d->isEncoding = false;

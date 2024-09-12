@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(JXLFrameStitching VERSION 0.2.0 LANGUAGES CXX)
+project(JXLFrameStitching VERSION 0.2.1 LANGUAGES CXX)
 
 if (POLICY CMP0002)
     cmake_policy(SET CMP0002 NEW)

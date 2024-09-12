@@ -1,9 +1,9 @@
 # JXL Frame Stitching
 ### Join multiple images into a single JPEG XL image as multilayered or animated, using libjxl's API.
 
-![Screnshot](jxlframess-020.png)
+![Screnshot](jxlframess-030.png)
 
-Written in C++ with Qt 6.5.3
+Written in C++ with Qt 6.7.2
 
 ## Features
 - Image loading is handled with QImage, will accept anything that QImage can load
@@ -14,6 +14,7 @@ Written in C++ with Qt 6.5.3
 - Image frame ordering:
   - Animated: first image = first frame; last image = last frame
   - Multilayered: first image = bottom layer; last image = top layer
+- (Experimental) Automatic frame cropping
 
 ### Current limitations:
 - Only RGB color model

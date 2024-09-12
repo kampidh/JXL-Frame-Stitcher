@@ -635,10 +635,10 @@
              <item>
               <widget class="QGroupBox" name="autoCropChk">
                <property name="toolTip">
-                <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Enables automatic frame cropping on animated input, set the color difference threshold with the spin box.&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;Note&lt;/span&gt;: enabling this will also explicitly enable JXL input coalescing. Also, this might won't work properly with frames with partial transparency. This also may slow decode a little bit.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+                <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Experimental: enables automatic frame cropping on animated input, set the color difference threshold with the spin box.&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;Note&lt;/span&gt;: enabling this will also explicitly enable JXL input coalescing. Also, this might won't work properly with frames with partial transparency. &lt;span style=&quot; font-weight:700;&quot;&gt;Might not work with complex project&lt;/span&gt; with layered and referenced frames -- try first on a small number of frames and/or low effort encoding before using it on a big project.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
                </property>
                <property name="title">
-                <string>Auto crop</string>
+                <string>(Experimental) Auto crop</string>
                </property>
                <property name="checkable">
                 <bool>true</bool>

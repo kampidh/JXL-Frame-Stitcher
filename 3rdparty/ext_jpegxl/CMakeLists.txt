@@ -47,8 +47,8 @@ ExternalProject_Add( ext_brotli
 
 ExternalProject_Add( ext_jpegxl
     DOWNLOAD_DIR ${EXTERNALS_DOWNLOAD_DIR}
-    URL https://github.com/libjxl/libjxl/archive/refs/tags/v0.10.3.tar.gz
-    URL_HASH SHA256=e0191411cfcd927eebe5392d030fe4283fe27ba1685ab7265104936e0b4283a6
+    URL https://github.com/libjxl/libjxl/archive/refs/tags/v0.11.0.tar.gz
+    URL_HASH SHA256=7ce4ec8bb37a435a73ac18c4c9ff56c2dc6c98892bf3f53a328e3eca42efb9cf
 
     INSTALL_DIR ${PREFIX_ext_jpegxl}
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${PREFIX_ext_jpegxl}

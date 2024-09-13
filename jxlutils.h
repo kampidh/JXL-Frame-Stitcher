@@ -244,7 +244,7 @@ static constexpr char aboutData[] = {
 <br>Project github page: <a href="https://github.com/kampidh/JXL-Frame-Stitcher">https://github.com/kampidh/JXL-Frame-Stitcher</a></p>
 <p>3rd party libraries used:</p>
 <ul>
-<li>libjxl 0.10.3</li>
+<li>libjxl 0.11.0</li>
 <li>littlecms 2.16</li>
 </ul>
 </body></html>

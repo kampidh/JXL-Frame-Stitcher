@@ -7,6 +7,11 @@
 #include <QFile>
 #include <QString>
 #include <QImage>
+#include <QImageReader>
+#include <QFileInfo>
+#include <QRandomGenerator>
+#include <QColorSpace>
+#include <QMutex>
 
 #include <jxl/encode_cxx.h>
 
@@ -171,10 +176,11 @@ struct JxlOutputProcessor {
 
 struct InputFileData {
     uint8_t isRefFrame{0};
-    uint16_t frameDuration{1};
+    uint32_t frameDuration{1};
     uint8_t frameReference{0};
     int16_t frameXPos{0};
     int16_t frameYPos{0};
+    bool isPageEnd{false};
     JxlBlendMode blendMode{JXL_BLEND_BLEND};
     QString filename{};
     QString frameName{};
@@ -217,6 +223,7 @@ struct EncodeParams {
     bool lossyModular{false};
     bool coalesceJxlInput{false};
     bool autoCropFrame{true};
+    bool chunkedFrame{false};
 
     QString outputFileName{};
 };
@@ -226,13 +233,171 @@ void QImageToBuffer(const QImage &img, QByteArray &ba, size_t pxsize, bool alpha
 {
     auto srcPointer = reinterpret_cast<const T *>(img.constBits());
     auto dstPointer = reinterpret_cast<T *>(ba.data());
-    const int chan = (alpha) ? 4 : 3;
+    const size_t chan = (alpha) ? 4 : 3;
     for (size_t i = 0; i < pxsize; i++) {
         memcpy(dstPointer, srcPointer, sizeof(T) * chan);
         srcPointer += 4;
         dstPointer += chan;
     }
 }
+
+template<typename T>
+void QImageToBuffer(const QImage &img, QDataStream &ds, size_t pxsize, bool alpha)
+{
+    auto srcPointer = reinterpret_cast<const T *>(img.constBits());
+    const size_t chan = (alpha) ? 4 : 3;
+    QByteArray tempb;
+    tempb.resize(sizeof(T) * chan);
+    for (size_t i = 0; i < pxsize; i++) {
+        memcpy(tempb.data(), srcPointer, sizeof(T) * chan);
+        ds.writeRawData(tempb.constData(), tempb.size());
+        srcPointer += 4;
+    }
+}
+
+// WIP
+struct ChunkedImageFrame {
+    ChunkedImageFrame(JxlPixelFormat infmt, size_t bytesperchan, QSize imSize)
+        : format(infmt)
+        , bytesPerChannel(bytesperchan)
+        , numChannels(infmt.num_channels)
+        , imgSize(imSize)
+    {
+        qDebug() << "Chunked struct";
+        bytesPerPixel = numChannels * bytesPerChannel;
+    }
+
+    JxlChunkedFrameInputSource getChunkedStruct()
+    {
+        return JxlChunkedFrameInputSource{this,
+                                          GetColorChannelsPixelFormat,
+                                          GetColorChannelDataAt,
+                                          GetExtraChannelPixelFormat,
+                                          GetExtraChannelDataAt,
+                                          ReleaseCurrentData};
+    }
+
+    void inputData(QIODevice *dvc)
+    {
+        dev = dvc;
+    }
+
+    void inputData(const QByteArray *imin)
+    {
+        imgraw = imin;
+    }
+
+    static void GetColorChannelsPixelFormat(void *opaque, JxlPixelFormat *pixel_format)
+    {
+        ChunkedImageFrame *self = reinterpret_cast<ChunkedImageFrame *>(opaque);
+        *pixel_format = self->format;
+    }
+
+    static const void *
+    GetColorChannelDataAt(void *opaque, size_t xpos, size_t ypos, size_t xsize, size_t ysize, size_t *row_offset)
+    {
+        ChunkedImageFrame *self = reinterpret_cast<ChunkedImageFrame *>(opaque);
+        // qDebug() << "GetColorChannelDataAt xpos" << xpos << "ypos" << ypos << "xsize" << xsize << "ysize" << ysize
+        //          << "arr" << self->rawImageArray.size();
+        if (self->dev) {
+            self->mutex.lock();
+
+            // [[maybe_unused]]
+            // const QRect roi{static_cast<int>(xpos),
+            //                 static_cast<int>(ypos),
+            //                 static_cast<int>(xsize),
+            //                 static_cast<int>(ysize)};
+
+            const size_t rowOffset = self->imgSize.width() * self->bytesPerPixel;
+
+            const size_t xoffset = xpos * self->bytesPerPixel;
+            const size_t yoffset = ypos * rowOffset;
+            const size_t xyoffset = xoffset + yoffset;
+
+            {
+                QByteArray rawPatch;
+                for (int y = 0; y < ysize; y++) {
+                    const size_t rowBegin = xyoffset + (y * rowOffset);
+                    self->dev->seek(rowBegin);
+                    const QByteArray xyc = self->dev->read(xsize * self->bytesPerPixel);
+                    rawPatch.append(xyc);
+                }
+
+                self->rawImageArray.append(rawPatch);
+            }
+
+            *row_offset = xsize * self->bytesPerPixel;
+
+            self->mutex.unlock();
+            // qDebug() << "arrnum" << self->rawImageArray.size();
+
+            return self->rawImageArray.last().data();
+        } else if (self->imgraw) {
+            *row_offset = self->imgSize.width() * self->bytesPerPixel;
+            const size_t offset = ypos * *row_offset + xpos * self->bytesPerPixel;
+            return self->imgraw->data() + offset;
+        }
+        return nullptr;
+    }
+
+    static void GetExtraChannelPixelFormat(void *opaque, size_t ec_index, JxlPixelFormat *pixel_format)
+    {
+        // qDebug() << "GetExtraChannelPixelFormat at" << ec_index;
+        ChunkedImageFrame *self = reinterpret_cast<ChunkedImageFrame *>(opaque);
+        *pixel_format = self->format;
+    }
+
+    static const void *GetExtraChannelDataAt(void *opaque,
+                                             size_t ec_index,
+                                             size_t xpos,
+                                             size_t ypos,
+                                             size_t xsize,
+                                             size_t ysize,
+                                             size_t *row_offset)
+    {
+        // qDebug() << "GetExtraChannelDataAt at" << ec_index;
+        ChunkedImageFrame *self = reinterpret_cast<ChunkedImageFrame *>(opaque);
+        *row_offset = 0;
+        return nullptr;
+    }
+
+    static void ReleaseCurrentData(void *opaque, const void *buffer)
+    {
+        // qDebug() << "release at" << &buffer;
+        ChunkedImageFrame *self = reinterpret_cast<ChunkedImageFrame *>(opaque);
+        self->mutex.lock();
+        for (int i = 0; i < self->rawImageArray.size(); i++) {
+            if (self->rawImageArray.at(i).data() == buffer) {
+                self->rawImageArray[i].clear();
+                // qDebug() << "release at data" << i;
+            }
+        }
+        self->mutex.unlock();
+    }
+
+    bool isLarge{false};
+
+    size_t bytesPerChannel{0};
+    size_t numChannels{0};
+    JxlPixelFormat format{};
+
+    const QByteArray *imgraw{nullptr};
+    QIODevice *dev{nullptr};
+
+    QSize imgSize;
+    size_t bytesPerPixel{0};
+
+    // QString fname;
+    // int framenum{0};
+    // EncodeParams params;
+    // const QByteArray *rootICC;
+    // QByteArray imagerawdata;
+    QVector<QByteArray> rawImageArray;
+    // QVector<QSize> imgrawsizevec;
+    // QImageReader reader;
+    // bool isJxl{false};
+    QMutex mutex;
+};
 
 static constexpr char aboutData[] = {
     R"(<html><head/><body>

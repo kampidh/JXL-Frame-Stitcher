@@ -12,6 +12,10 @@
 
 #define USE_STREAMING_OUTPUT // need libjxl >= 0.10.0
 
+// let's disable temp file for now (set to never trigger max raw frame size)
+#define TEMP_FILE_DIR "./tempframe.bin"
+#define MAX_DECODED_BEFORE_TEMPFILE SIZE_MAX
+
 class Q_DECL_HIDDEN JXLEncoderObject::Private
 {
 public:
@@ -109,6 +113,9 @@ bool JXLEncoderObject::canEncode()
         return false;
     }
 
+    emit sigStatusText("Parsing first image information...");
+    QCoreApplication::processEvents();
+
     QFileInfo fst(d->idat.first().filename);
 
     if (fst.suffix().toLower() != "jxl") {
@@ -166,6 +173,8 @@ bool JXLEncoderObject::doEncode()
         d->isAborted = true;
         return false;
     }
+
+    emit sigStatusText("Begin encoding...");
 
 #ifdef USE_STREAMING_OUTPUT
     jxfrstch::JxlOutputProcessor outProcessor;
@@ -434,9 +443,27 @@ bool JXLEncoderObject::doEncode()
 
             QByteArray imagerawdata;
             bool needCrop = false;
+            bool isMassive = false;
             QSize frameSize;
             size_t frameResolution;
             d->elt.start();
+            // QImage cFrame;
+            const size_t byteSize = [&]() {
+                switch (d->params.bitDepth) {
+                case ENC_BIT_8:
+                    return 1;
+                    break;
+                case ENC_BIT_16:
+                case ENC_BIT_16F:
+                    return 2;
+                    break;
+                case ENC_BIT_32F:
+                    return 4;
+                default:
+                    return 1;
+                    break;
+                }
+            }();
             {
                 QImage currentFrame(reader.read());
                 QRect currentFrameRect = reader.currentImageRect();
@@ -450,7 +477,10 @@ bool JXLEncoderObject::doEncode()
                     return false;
                 }
 
-                if (d->params.autoCropFrame) {
+                const size_t uncropSize =
+                    static_cast<size_t>(currentFrame.width()) * static_cast<size_t>(currentFrame.height());
+
+                if (d->params.autoCropFrame && uncropSize < 50'000'000) {
                     if ((isImageAnim && imageframenum == 0) || (!isImageAnim && i == 0)) {
                         acResetFrame = true;
                         d->prevFrame = currentFrame;
@@ -591,57 +621,64 @@ bool JXLEncoderObject::doEncode()
                 }
 
                 frameSize = currentFrame.size();
-                frameResolution = frameSize.width() * frameSize.height();
-                const size_t byteSize = [&]() {
-                    switch (d->params.bitDepth) {
-                    case ENC_BIT_8:
-                        return 1;
-                        break;
-                    case ENC_BIT_16:
-                    case ENC_BIT_16F:
-                        return 2;
-                        break;
-                    case ENC_BIT_32F:
-                        return 4;
-                    default:
-                        return 1;
-                        break;
+                frameResolution = static_cast<size_t>(frameSize.width()) * static_cast<size_t>(frameSize.height());
+                // qDebug() << "pxsize" << frameResolution;
+
+                const size_t neededBytes = ((d->params.alpha) ? 4 : 3) * byteSize * frameResolution;
+                isMassive = (neededBytes > MAX_DECODED_BEFORE_TEMPFILE) && d->params.chunkedFrame;
+                // isMassive = true;
+                // qDebug() << "bytes" << neededBytes;
+                // imagerawdata.resize(neededBytes, 0x0);
+
+                QFile tempFrameFile(TEMP_FILE_DIR);
+                QDataStream ds = [&]() {
+                    if (isMassive) {
+                        emit sigStatusText("Input image too large, saving intermediate to disk...");
+                        // qDebug() << "tempfile path";
+                        tempFrameFile.open(QIODevice::WriteOnly);
+                        return QDataStream(&tempFrameFile);
+                    } else {
+                        // qDebug() << "memory path";
+                        return QDataStream(&imagerawdata, QIODevice::WriteOnly);
                     }
                 }();
 
-                const size_t neededBytes = ((d->params.alpha) ? 4 : 3) * byteSize * frameResolution;
-                imagerawdata.resize(neededBytes, 0x0);
-
                 switch (d->params.bitDepth) {
                 case ENC_BIT_8:
-                    jxfrstch::QImageToBuffer<uint8_t>(currentFrame, imagerawdata, frameResolution, d->params.alpha);
+                    jxfrstch::QImageToBuffer<uint8_t>(currentFrame, ds, frameResolution, d->params.alpha);
                     break;
                 case ENC_BIT_16:
-                    jxfrstch::QImageToBuffer<uint16_t>(currentFrame, imagerawdata, frameResolution, d->params.alpha);
+                    jxfrstch::QImageToBuffer<uint16_t>(currentFrame, ds, frameResolution, d->params.alpha);
                     break;
                 case ENC_BIT_16F:
-                    jxfrstch::QImageToBuffer<qfloat16>(currentFrame, imagerawdata, frameResolution, d->params.alpha);
+                    jxfrstch::QImageToBuffer<qfloat16>(currentFrame, ds, frameResolution, d->params.alpha);
                     break;
                 case ENC_BIT_32F:
-                    jxfrstch::QImageToBuffer<float>(currentFrame, imagerawdata, frameResolution, d->params.alpha);
+                    jxfrstch::QImageToBuffer<float>(currentFrame, ds, frameResolution, d->params.alpha);
                     break;
                 default:
                     break;
                 }
+
+                if (isMassive) {
+                    tempFrameFile.close();
+                }
+
+                // qDebug() << "Pixel allocated";
             }
 
-            const uint16_t frameTick = [&]() {
+            const uint32_t frameTick = [&]() {
                 // what the f-
                 if (!(isImageAnim || reader.imageCount() > 0)
                     || !reader.canRead()) { // can't read == end of animation or just a single frame
                     if (isImageAnim) { // if it's end and the image is animated, set to 0
-                        return static_cast<uint16_t>(0);
+                        return static_cast<uint32_t>(0);
                     }
-                    return ind.frameDuration; // otherwise set the frame duration
+                    return ind.isPageEnd ? UINT32_MAX : ind.frameDuration; // otherwise set the frame duration
                 } else if (reader.nextImageDelay() == 0 || !d->params.animation) {
-                    return static_cast<uint16_t>(0);
+                    return static_cast<uint32_t>(0);
                 } else {
-                    return static_cast<uint16_t>(
+                    return static_cast<uint32_t>(
                         qRound(qMax(static_cast<float>(reader.nextImageDelay()) / d->params.frameTimeMs, 1.0)));
                 }
             }();
@@ -712,11 +749,35 @@ bool JXLEncoderObject::doEncode()
 
             const qint64 decodeNs = d->elt.nsecsElapsed();
 
-            if (JxlEncoderAddImageFrame(frameSettings, &pixelFormat, imagerawdata.constData(), imagerawdata.size())
-                != JXL_ENC_SUCCESS) {
-                emit sigThrowError("JxlEncoderAddImageFrame failed!");
-                d->isAborted = true;
-                return false;
+            if (!d->params.chunkedFrame) {
+                if (JxlEncoderAddImageFrame(frameSettings, &pixelFormat, imagerawdata.constData(), imagerawdata.size())
+                    != JXL_ENC_SUCCESS) {
+                    emit sigThrowError("JxlEncoderAddImageFrame failed!");
+                    d->isAborted = true;
+                    return false;
+                }
+            } else {
+                jxfrstch::ChunkedImageFrame ifrm(pixelFormat, byteSize, frameSize);
+                QFile tmp(TEMP_FILE_DIR);
+                if (isMassive) {
+                    tmp.open(QIODevice::ReadOnly);
+                    ifrm.inputData(&tmp);
+                } else {
+                    ifrm.inputData(&imagerawdata);
+                }
+
+                if (JxlEncoderAddChunkedFrame(frameSettings,
+                                              TO_JXL_BOOL(i == framenum - 1 && !reader.canRead()),
+                                              ifrm.getChunkedStruct())
+                    != JXL_ENC_SUCCESS) {
+                    emit sigThrowError("JxlEncoderAddChunkedFrame failed!");
+                    d->isAborted = true;
+                    return false;
+                }
+                if (isMassive) {
+                    tmp.close();
+                    tmp.remove();
+                }
             }
 
             bool isMb = false;
@@ -755,8 +816,10 @@ bool JXLEncoderObject::doEncode()
             d->totalFramesProcessed++;
 
             if (d->encodeAbort && d->abortCompleteFile) {
-                JxlEncoderCloseInput(d->enc.get());
-                JxlEncoderFlushInput(d->enc.get());
+                if (!d->params.chunkedFrame) {
+                    JxlEncoderCloseInput(d->enc.get());
+                    JxlEncoderFlushInput(d->enc.get());
+                }
                 const double finalAbortImageSizeKiB = [&]() {
 #ifdef USE_STREAMING_OUTPUT
                     if (outProcessor.finalized_position > (1024 * 1024 * 10)) {
@@ -794,10 +857,14 @@ bool JXLEncoderObject::doEncode()
             }
 
             if (i == framenum - 1 && !reader.canRead()) {
-                JxlEncoderCloseInput(d->enc.get());
+                if (!d->params.chunkedFrame) {
+                    JxlEncoderCloseInput(d->enc.get());
+                }
             }
 #ifdef USE_STREAMING_OUTPUT
-            JxlEncoderFlushInput(d->enc.get());
+            if (!d->params.chunkedFrame) {
+                JxlEncoderFlushInput(d->enc.get());
+            }
 #endif
             const qint64 encodeNs = d->elt.nsecsElapsed() - decodeNs;
             const double decNstoSec = static_cast<double>(decodeNs) / 1.0e9;
@@ -805,7 +872,7 @@ bool JXLEncoderObject::doEncode()
 
             const double decmpps = [&]() {
                 if (d->elt.isValid() && decNstoSec > 0) {
-                    const int frameres = frameResolution;
+                    const size_t frameres = frameResolution;
                     return static_cast<double>((static_cast<double>(frameResolution) / 1000000.0) / decNstoSec);
                 } else {
                     return 0.0;
@@ -814,7 +881,7 @@ bool JXLEncoderObject::doEncode()
 
             const double mpps = [&]() {
                 if (d->elt.isValid() && encNstoSec > 0) {
-                    const int frameres = frameResolution;
+                    const size_t frameres = frameResolution;
                     return static_cast<double>((static_cast<double>(frameResolution) / 1000000.0) / encNstoSec);
                 } else {
                     return 0.0;

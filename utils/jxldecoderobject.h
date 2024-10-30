@@ -21,6 +21,7 @@ public:
     QImage read();
     void resetJxlDecoder();
 
+    QSize size() const;
     int imageCount() const;
     bool haveAnimation() const;
     bool canRead() const;

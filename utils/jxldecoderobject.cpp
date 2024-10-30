@@ -365,6 +365,16 @@ QByteArray JXLDecoderObject::getIccProfie() const
     return QByteArray();
 }
 
+QSize JXLDecoderObject::size() const
+{
+    if (!d->isJxl) {
+        return d->reader.size();
+    } else if (d->isJxl) {
+        return d->rootSize;
+    }
+    return QSize();
+}
+
 int JXLDecoderObject::imageCount() const
 {
     if (!d->isJxl) {

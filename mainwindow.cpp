@@ -125,6 +125,8 @@ MainWindow::MainWindow(QWidget *parent)
     d->statLabel->setAlignment(Qt::AlignRight);
     d->statLabel->clear();
 
+    QImageReader::setAllocationLimit(0);
+
     connect(ui->clearFilesBtn, &QPushButton::clicked, this, [&]() {
         ui->statusBar->showMessage(
             "Import image frames by drag and dropping into the file list or pressing Add Files...");
@@ -140,10 +142,12 @@ MainWindow::MainWindow(QWidget *parent)
             ui->frameDurationSpn->setValue(0);
             ui->frameRefSpinBox->setEnabled(false);
             ui->frameDurationSpn->setEnabled(false);
+            ui->pageEndChk->setEnabled(false);
         } else {
             ui->frameDurationSpn->setValue(1);
             ui->frameRefSpinBox->setEnabled(true);
             ui->frameDurationSpn->setEnabled(true);
+            ui->pageEndChk->setEnabled(true);
         }
     });
     connect(ui->alphaEnableChk, &QCheckBox::toggled, this, [&]() {
@@ -161,10 +165,12 @@ MainWindow::MainWindow(QWidget *parent)
         if (!ui->isAnimatedBox->isChecked()) {
             ui->frameRefSpinBox->setEnabled(false);
             ui->frameDurationSpn->setEnabled(false);
+            ui->pageEndChk->setEnabled(false);
             ui->saveAsRefSpn->setEnabled(false);
         } else {
             ui->frameRefSpinBox->setEnabled(ui->saveAsRefSpn->value() == 0);
             ui->frameDurationSpn->setEnabled(ui->saveAsRefSpn->value() == 0);
+            ui->pageEndChk->setEnabled(ui->saveAsRefSpn->value() == 0);
             ui->saveAsRefSpn->setEnabled(ui->treeWidget->selectedItems().size() == 1);
         }
     });
@@ -497,6 +503,7 @@ void MainWindow::removeSelected()
 void MainWindow::selectingFrames()
 {
     const auto *currentSelItem = ui->treeWidget->currentItem();
+    bool isDurInt = true;
 
     if (ui->treeWidget->selectedItems().size() > 1) {
         ui->selectedFrameBox->setEnabled(true);
@@ -505,6 +512,7 @@ void MainWindow::selectingFrames()
 
         ui->saveAsRefSpn->setValue(-1);
         ui->frameDurationSpn->setValue(-1);
+        ui->pageEndChk->setCheckState(Qt::PartiallyChecked);
         ui->frameRefSpinBox->setValue(-1);
         ui->frameXPosSpn->setValue(currentSelItem->data(4, 0).toInt());
         ui->frameYPosSpn->setValue(currentSelItem->data(5, 0).toInt());
@@ -518,7 +526,15 @@ void MainWindow::selectingFrames()
         ui->saveAsRefSpn->setEnabled(false);
         ui->selectedFileLabel->setText(currentSelItem->data(0, 0).toString());
         ui->saveAsRefSpn->setValue(currentSelItem->data(1, 0).toInt());
-        ui->frameDurationSpn->setValue(currentSelItem->data(2, 0).toInt());
+        ui->frameDurationSpn->setValue(currentSelItem->data(2, 0).toInt(&isDurInt));
+        if (!isDurInt) {
+            ui->frameDurationSpn->setValue(1);
+            ui->frameDurationSpn->setEnabled(false);
+            ui->pageEndChk->setChecked(true);
+        } else {
+            ui->pageEndChk->setChecked(false);
+        }
+        // ui->pageEndChk->setChecked(false);
         ui->frameRefSpinBox->setValue(currentSelItem->data(3, 0).toInt());
         ui->frameXPosSpn->setValue(currentSelItem->data(4, 0).toInt());
         ui->frameYPosSpn->setValue(currentSelItem->data(5, 0).toInt());
@@ -567,10 +583,16 @@ void MainWindow::selectingFrames()
     if (!ui->isAnimatedBox->isChecked()) {
         ui->frameRefSpinBox->setEnabled(false);
         ui->frameDurationSpn->setEnabled(false);
+        ui->pageEndChk->setEnabled(false);
         ui->saveAsRefSpn->setEnabled(false);
     } else {
         ui->frameRefSpinBox->setEnabled(ui->saveAsRefSpn->value() <= 0);
-        ui->frameDurationSpn->setEnabled(ui->saveAsRefSpn->value() <= 0);
+        if (isDurInt) {
+            ui->frameDurationSpn->setEnabled(ui->saveAsRefSpn->value() <= 0);
+        } else {
+            ui->frameDurationSpn->setEnabled(false);
+        }
+        ui->pageEndChk->setEnabled(ui->saveAsRefSpn->value() <= 0);
         ui->saveAsRefSpn->setEnabled(ui->treeWidget->selectedItems().size() == 1);
     }
 }
@@ -588,7 +610,15 @@ bool MainWindow::saveConfigAs(bool forceDialog)
 
         jsobj["filename"] = itm->data(0, 0).toString();
         jsobj["isRef"] = itm->data(1, 0).toInt();
-        jsobj["frameDur"] = itm->data(2, 0).toInt();
+        bool isDurInt = true;
+        int fDur = itm->data(2, 0).toInt(&isDurInt);
+        if (!isDurInt) {
+            jsobj["frameDur"] = 1;
+            jsobj["frameEndP"] = true;
+        } else {
+            jsobj["frameDur"] = itm->data(2, 0).toInt();
+            jsobj["frameEndP"] = false;
+        }
         jsobj["frameRef"] = itm->data(3, 0).toInt();
         jsobj["frameXPos"] = itm->data(4, 0).toInt();
         jsobj["frameYPos"] = itm->data(5, 0).toInt();
@@ -745,6 +775,7 @@ void MainWindow::openConfig(const QString &tmpfn)
                 const JxlBlendMode tmpBlend = static_cast<JxlBlendMode>(ff.value("blend").toInt(2));
                 const int tmpFrameDur = ff.value("frameDur").toInt(1);
                 const int tmpFrameRef = ff.value("frameRef").toInt(0);
+                const bool tmpFrameEndPage = ff.value("frameEndP").toBool(false);
                 const int tmpIsRef = [&]() {
                     if (ff.value("isRef").isBool()) {
                         return ff.value("isRef").toBool(false) ? 1 : 0;
@@ -766,11 +797,14 @@ void MainWindow::openConfig(const QString &tmpfn)
                     ifd.frameXPos = tmpFrameX;
                     ifd.frameYPos = tmpFrameY;
                     ifd.frameName = tmpFrameName;
+                    ifd.isPageEnd = tmpFrameEndPage;
 
                     QTreeWidgetItem *item = new QTreeWidgetItem(ui->treeWidget);
                     item->setData(0, 0, ifd.filename);
                     item->setData(1, 0, ifd.isRefFrame);
                     item->setData(2, 0, ifd.frameDuration);
+                    if (ifd.isPageEnd)
+                        item->setData(2, 0, "END");
                     item->setData(3, 0, ifd.frameReference);
                     item->setData(4, 0, ifd.frameXPos);
                     item->setData(5, 0, ifd.frameYPos);
@@ -780,6 +814,9 @@ void MainWindow::openConfig(const QString &tmpfn)
                     item->setFlags(item->flags() & ~Qt::ItemIsDropEnabled);
                     if (ifd.isRefFrame) {
                         item->setBackground(1, QColor(128, 255, 128));
+                    }
+                    if (ifd.isPageEnd) {
+                        item->setBackground(2, QColor(255, 255, 128));
                     }
                     ui->treeWidget->addTopLevelItem(item);
                 }
@@ -807,6 +844,7 @@ void MainWindow::currentFrameSettingChanged()
     const bool changeFrameBlend = (ui->blendModeCmb->currentIndex() != 5);
     const bool changeFrameName = (ui->frameNameLine->text() != "<unchanged>");
     const bool changeSaveRef = (ui->saveAsRefSpn->value() >= 0);
+    const bool changePageEnd = (ui->pageEndChk->checkState() != Qt::PartiallyChecked);
 
     foreach (const auto &v, selItemList) {
         if (changeSaveRef) {
@@ -819,6 +857,14 @@ void MainWindow::currentFrameSettingChanged()
         }
         if (changeFrameDur)
             v->setData(2, 0, ui->frameDurationSpn->value());
+        if (changePageEnd) {
+            if (ui->pageEndChk->isChecked()) {
+                v->setData(2, 0, "END");
+                v->setBackground(2, QColor(255, 255, 128));
+            } else {
+                v->setBackground(2, {});
+            }
+        }
         if (changeFrameRef)
             v->setData(3, 0, ui->frameRefSpinBox->value());
         if (v != ui->treeWidget->topLevelItem(0)) {
@@ -910,6 +956,7 @@ void MainWindow::doEncode()
     params.autoCropFrame = params.animation ? ui->autoCropChk->isChecked() : false;
     params.autoCropFuzzyComparison = ui->autoCropTreshSpn->value();
     params.coalesceJxlInput = ui->autoCropChk ? true : ui->actionCoalesce_JXL_input->isChecked();
+    params.chunkedFrame = ui->actionUse_chunked_input->isChecked();
 
     if (encEffort > 10) {
         const auto diag = QMessageBox::warning(this,
@@ -964,9 +1011,16 @@ void MainWindow::doEncode()
     for (int i = 0; i < framenum; i++) {
         QTreeWidgetItem *itm = ui->treeWidget->topLevelItem(i);
         jxfrstch::InputFileData ind;
+        bool isDurInt = true;
         ind.filename = itm->data(0, 0).toString();
         ind.isRefFrame = itm->data(1, 0).toInt();
-        ind.frameDuration = itm->data(2, 0).toInt();
+        ind.frameDuration = itm->data(2, 0).toInt(&isDurInt);
+        if (!isDurInt) {
+            ind.frameDuration = 1;
+            ind.isPageEnd = true;
+        } else {
+            ind.isPageEnd = false;
+        }
         ind.frameReference = itm->data(3, 0).toInt();
         ind.frameXPos = itm->data(4, 0).toInt();
         ind.frameYPos = itm->data(5, 0).toInt();

@@ -444,6 +444,7 @@ bool JXLEncoderObject::doEncode()
             QByteArray imagerawdata;
             bool needCrop = false;
             bool isMassive = false;
+            bool isCropEnabled = false;
             QSize frameSize;
             size_t frameResolution;
             d->elt.start();
@@ -480,7 +481,10 @@ bool JXLEncoderObject::doEncode()
                 const size_t uncropSize =
                     static_cast<size_t>(currentFrame.width()) * static_cast<size_t>(currentFrame.height());
 
-                if (d->params.autoCropFrame && uncropSize < 50'000'000) {
+                if ((d->params.autoCropFrame && !d->params.onlyCropAnimatedFile)
+                    || (isImageAnim && d->params.onlyCropAnimatedFile && d->params.autoCropFrame)
+                        && uncropSize < 50'000'000) {
+                    isCropEnabled = true;
                     if ((isImageAnim && imageframenum == 0) || (!isImageAnim && i == 0)) {
                         acResetFrame = true;
                         d->prevFrame = currentFrame;
@@ -712,7 +716,7 @@ bool JXLEncoderObject::doEncode()
                 }
             }
 
-            if (d->params.autoCropFrame) {
+            if (isCropEnabled) {
                 if (acResetFrame) {
                     frameHeader->layer_info.save_as_reference = 1;
                 }

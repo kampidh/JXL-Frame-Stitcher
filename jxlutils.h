@@ -222,7 +222,8 @@ struct EncodeParams {
     bool premulAlpha{false};
     bool lossyModular{false};
     bool coalesceJxlInput{false};
-    bool autoCropFrame{true};
+    bool autoCropFrame{false};
+    bool onlyCropAnimatedFile{false};
     bool chunkedFrame{false};
 
     QString outputFileName{};

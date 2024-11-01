@@ -642,6 +642,7 @@ bool MainWindow::saveConfigAs(bool forceDialog)
     sets["photonNoise"] = ui->photonNoiseSpn->value();
     sets["autoCrop"] = ui->autoCropChk->isChecked();
     sets["autoCropThr"] = ui->autoCropTreshSpn->value();
+    sets["autoCropOnlyFile"] = ui->onlyCropAnimatedChk->isChecked();
     sets["fileList"] = files;
 
     const QByteArray binsave = QCborValue::fromJsonValue(sets).toCbor();
@@ -748,6 +749,7 @@ void MainWindow::openConfig(const QString &tmpfn)
         const double photonNoise = loadjs.value("photonNoise").toDouble(0.0);
         const bool autoCrop = loadjs.value("autoCrop").toBool(false);
         const double autoCropThr = loadjs.value("autoCropThr").toDouble(0.0);
+        const bool autoCropOnlyFile = loadjs.value("autoCropOnlyFile").toBool(false);
 
         ui->alphaEnableChk->setChecked(useAlpha);
         ui->alphaPremulChk->setChecked(usePremulAlpha);
@@ -763,6 +765,7 @@ void MainWindow::openConfig(const QString &tmpfn)
         ui->photonNoiseSpn->setValue(photonNoise);
         ui->autoCropChk->setChecked(autoCrop);
         ui->autoCropTreshSpn->setValue(autoCropThr);
+        ui->onlyCropAnimatedChk->setChecked(autoCropOnlyFile);
 
         if (loadjs.value("fileList").isArray()) {
             const QJsonArray farray = loadjs.value("fileList").toArray();
@@ -954,6 +957,7 @@ void MainWindow::doEncode()
     params.outputFileName = ui->outFileLineEdit->text();
     params.photonNoise = ui->photonNoiseSpn->value();
     params.autoCropFrame = params.animation ? ui->autoCropChk->isChecked() : false;
+    params.onlyCropAnimatedFile = params.animation ? ui->onlyCropAnimatedChk->isChecked() : false;
     params.autoCropFuzzyComparison = ui->autoCropTreshSpn->value();
     params.coalesceJxlInput = ui->autoCropChk ? true : ui->actionCoalesce_JXL_input->isChecked();
     params.chunkedFrame = ui->actionUse_chunked_input->isChecked();

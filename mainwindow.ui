@@ -925,13 +925,13 @@
     <bool>false</bool>
    </property>
    <property name="enabled">
-    <bool>false</bool>
+    <bool>true</bool>
    </property>
    <property name="text">
     <string>Use chunked input</string>
    </property>
    <property name="statusTip">
-    <string>To be implemented...</string>
+    <string>Experimental: use chunked decode and encode (may lower RAM usage on large file)</string>
    </property>
   </action>
  </widget>

@@ -264,7 +264,7 @@ struct ChunkedImageFrame {
         , numChannels(infmt.num_channels)
         , imgSize(imSize)
     {
-        qDebug() << "Chunked struct";
+        // qDebug() << "Chunked struct";
         bytesPerPixel = numChannels * bytesPerChannel;
     }
 

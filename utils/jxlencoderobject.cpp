@@ -671,10 +671,7 @@ bool JXLEncoderObject::doEncode()
                 // what the f-
                 if (!(isImageAnim || reader.imageCount() > 0)
                     || !reader.canRead()) { // can't read == end of animation or just a single frame
-                    if (isImageAnim) { // if it's end and the image is animated, set to 0
-                        return static_cast<uint32_t>(0);
-                    }
-                    return ind.isPageEnd ? UINT32_MAX : ind.frameDuration; // otherwise set the frame duration
+                    return ind.isPageEnd ? UINT32_MAX : ind.frameDuration; // set the frame duration
                 } else if (reader.nextImageDelay() == 0 || !d->params.animation) {
                     return static_cast<uint32_t>(0);
                 } else {

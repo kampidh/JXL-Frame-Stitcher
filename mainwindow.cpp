@@ -316,6 +316,10 @@ void MainWindow::resetApp()
     ui->photonNoiseSpn->setValue(0.0);
     ui->autoCropChk->setChecked(false);
     ui->autoCropTreshSpn->setValue(0.0);
+    ui->resamplingGrpChk->setChecked(false);
+    ui->resamplingCmb->setCurrentIndex(0);
+    ui->resamplingModeCmb->setCurrentIndex(0);
+    ui->alreadyDownsampleChk->setChecked(true);
 }
 
 void MainWindow::setUnsaved()
@@ -643,6 +647,10 @@ bool MainWindow::saveConfigAs(bool forceDialog)
     sets["autoCrop"] = ui->autoCropChk->isChecked();
     sets["autoCropThr"] = ui->autoCropTreshSpn->value();
     sets["autoCropOnlyFile"] = ui->onlyCropAnimatedChk->isChecked();
+    sets["enableResampling"] = ui->resamplingGrpChk->isChecked();
+    sets["resamplingSize"] = ui->resamplingCmb->currentIndex();
+    sets["resamplingMode"] = ui->resamplingModeCmb->currentIndex();
+    sets["alreadyDownsampled"] = ui->alreadyDownsampleChk->isChecked();
     sets["fileList"] = files;
 
     const QByteArray binsave = QCborValue::fromJsonValue(sets).toCbor();
@@ -750,6 +758,10 @@ void MainWindow::openConfig(const QString &tmpfn)
         const bool autoCrop = loadjs.value("autoCrop").toBool(false);
         const double autoCropThr = loadjs.value("autoCropThr").toDouble(0.0);
         const bool autoCropOnlyFile = loadjs.value("autoCropOnlyFile").toBool(false);
+        const bool enableResampling = loadjs.value("enableResampling").toBool(false);
+        const int resamplingSize = loadjs.value("resamplingSize").toInt(0);
+        const int resamplingMode = loadjs.value("resamplingMode").toInt(0);
+        const bool alreadyDownsampled = loadjs.value("alreadyDownsampled").toBool(true);
 
         ui->alphaEnableChk->setChecked(useAlpha);
         ui->alphaPremulChk->setChecked(usePremulAlpha);
@@ -766,6 +778,10 @@ void MainWindow::openConfig(const QString &tmpfn)
         ui->autoCropChk->setChecked(autoCrop);
         ui->autoCropTreshSpn->setValue(autoCropThr);
         ui->onlyCropAnimatedChk->setChecked(autoCropOnlyFile);
+        ui->resamplingGrpChk->setChecked(enableResampling);
+        ui->resamplingCmb->setCurrentIndex(resamplingSize);
+        ui->resamplingModeCmb->setCurrentIndex(resamplingMode);
+        ui->alreadyDownsampleChk->setChecked(alreadyDownsampled);
 
         if (loadjs.value("fileList").isArray()) {
             const QJsonArray farray = loadjs.value("fileList").toArray();
@@ -961,6 +977,10 @@ void MainWindow::doEncode()
     params.autoCropFuzzyComparison = ui->autoCropTreshSpn->value();
     params.coalesceJxlInput = ui->autoCropChk ? true : ui->actionCoalesce_JXL_input->isChecked();
     params.chunkedFrame = ui->actionUse_chunked_input->isChecked();
+    params.enableResample = ui->resamplingGrpChk->isChecked();
+    params.alreadyResampled = ui->alreadyDownsampleChk->isChecked();
+    params.resampleValue = ui->resamplingCmb->currentText().first(1).toInt();
+    params.resampleMode = ui->resamplingModeCmb->currentIndex() - 1;
 
     if (encEffort > 10) {
         const auto diag = QMessageBox::warning(this,

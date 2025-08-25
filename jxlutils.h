@@ -212,6 +212,8 @@ struct EncodeParams {
     int numerator{1};
     int denominator{1};
     int loops{0};
+    int resampleValue{0};
+    int resampleMode{-1};
 
     EncodeColorSpace colorSpace{ENC_CS_SRGB};
     EncodeBitDepth bitDepth{ENC_BIT_8};
@@ -225,6 +227,8 @@ struct EncodeParams {
     bool autoCropFrame{false};
     bool onlyCropAnimatedFile{false};
     bool chunkedFrame{false};
+    bool enableResample{false};
+    bool alreadyResampled{true};
 
     QString outputFileName{};
 };

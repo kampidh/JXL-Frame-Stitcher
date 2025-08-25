@@ -230,8 +230,13 @@ bool JXLEncoderObject::doEncode()
     // Set basic info
     JxlBasicInfo basicInfo{};
     JxlEncoderInitBasicInfo(&basicInfo);
-    basicInfo.xsize = static_cast<uint32_t>(d->rootSize.width());
-    basicInfo.ysize = static_cast<uint32_t>(d->rootSize.height());
+    if (d->params.enableResample && d->params.alreadyResampled) {
+        basicInfo.xsize = static_cast<uint32_t>(d->rootSize.width() * d->params.resampleValue);
+        basicInfo.ysize = static_cast<uint32_t>(d->rootSize.height() * d->params.resampleValue);
+    } else {
+        basicInfo.xsize = static_cast<uint32_t>(d->rootSize.width());
+        basicInfo.ysize = static_cast<uint32_t>(d->rootSize.height());
+    }
     switch (pixelFormat.data_type) {
     case JXL_TYPE_UINT8:
         basicInfo.bits_per_sample = 8;
@@ -397,6 +402,43 @@ bool JXLEncoderObject::doEncode()
                 != JXL_ENC_SUCCESS) {
                 qDebug() << "JxlEncoderFrameSettingsSetFloatOption photon noise failed";
                 emit sigThrowError("JxlEncoderFrameSettings photon noise failed!");
+                d->isAborted = true;
+                return false;
+            }
+        }
+
+        if (d->params.enableResample) {
+            if (JxlEncoderFrameSettingsSetOption(frameSettings,
+                                                 JXL_ENC_FRAME_SETTING_RESAMPLING,
+                                                 d->params.resampleValue)
+                != JXL_ENC_SUCCESS) {
+                qDebug() << "JxlEncoderFrameSettingsSetOption resampling failed";
+                emit sigThrowError("JxlEncoderFrameSettings resampling failed!");
+                d->isAborted = true;
+                return false;
+            }
+            if (JxlEncoderFrameSettingsSetOption(frameSettings,
+                                                 JXL_ENC_FRAME_SETTING_EXTRA_CHANNEL_RESAMPLING,
+                                                 d->params.resampleValue)
+                != JXL_ENC_SUCCESS) {
+                qDebug() << "JxlEncoderFrameSettingsSetOption EC resampling failed";
+                emit sigThrowError("JxlEncoderFrameSettings EC resampling failed!");
+                d->isAborted = true;
+                return false;
+            }
+            if (JxlEncoderFrameSettingsSetOption(frameSettings,
+                                                 JXL_ENC_FRAME_SETTING_ALREADY_DOWNSAMPLED,
+                                                 d->params.alreadyResampled ? JXL_TRUE : JXL_FALSE)
+                != JXL_ENC_SUCCESS) {
+                qDebug() << "JxlEncoderFrameSettingsSetOption already downsampled failed";
+                emit sigThrowError("JxlEncoderFrameSettings already downsampled failed!");
+                d->isAborted = true;
+                return false;
+            }
+            if (JxlEncoderSetUpsamplingMode(d->enc.get(), d->params.resampleValue, d->params.resampleMode)
+                != JXL_ENC_SUCCESS) {
+                qDebug() << "JxlEncoderSetUpsamplingMode failed";
+                emit sigThrowError("JxlEncoderSetUpsamplingMode failed!");
                 d->isAborted = true;
                 return false;
             }

@@ -609,173 +609,6 @@
                </property>
               </widget>
              </item>
-            </layout>
-           </widget>
-           <widget class="QWidget" name="tab_2">
-            <attribute name="title">
-             <string>Advanced</string>
-            </attribute>
-            <layout class="QVBoxLayout" name="verticalLayout_5">
-             <item>
-              <widget class="QCheckBox" name="modularLossyChk">
-               <property name="text">
-                <string>Modular lossy</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QCheckBox" name="alphaPremulChk">
-               <property name="text">
-                <string>Alpha premultiply</string>
-               </property>
-               <property name="checked">
-                <bool>false</bool>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <layout class="QFormLayout" name="formLayout_8">
-               <item row="0" column="0">
-                <widget class="QLabel" name="label_18">
-                 <property name="text">
-                  <string>Photon noise:</string>
-                 </property>
-                </widget>
-               </item>
-               <item row="0" column="1">
-                <widget class="QDoubleSpinBox" name="photonNoiseSpn">
-                 <property name="maximum">
-                  <double>999999.000000000000000</double>
-                 </property>
-                </widget>
-               </item>
-              </layout>
-             </item>
-             <item>
-              <widget class="Line" name="line">
-               <property name="orientation">
-                <enum>Qt::Orientation::Horizontal</enum>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QGroupBox" name="autoCropChk">
-               <property name="toolTip">
-                <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Experimental: enables automatic frame cropping on animated input, set the color difference threshold with the spin box.&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;Note&lt;/span&gt;: enabling this will also explicitly enable JXL input coalescing. Also, this might won't work properly with frames with partial transparency. &lt;span style=&quot; font-weight:700;&quot;&gt;Might not work with complex project&lt;/span&gt; with layered and referenced frames -- try first on a small number of frames and/or low effort encoding before using it on a big project.&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;Only crop animated file&lt;/span&gt;: if enabled, this will only auto crop animated input file (eg. animated JXL and GIF), and leave normal frames uncropped.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-               </property>
-               <property name="title">
-                <string>(Experimental) Auto crop</string>
-               </property>
-               <property name="checkable">
-                <bool>true</bool>
-               </property>
-               <property name="checked">
-                <bool>false</bool>
-               </property>
-               <layout class="QVBoxLayout" name="verticalLayout_7">
-                <item>
-                 <widget class="QCheckBox" name="onlyCropAnimatedChk">
-                  <property name="text">
-                   <string>Only crop animated file</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <layout class="QFormLayout" name="formLayout_7">
-                  <item row="0" column="0">
-                   <widget class="QLabel" name="label_17">
-                    <property name="text">
-                     <string>Color threshold:</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="0" column="1">
-                   <widget class="QDoubleSpinBox" name="autoCropTreshSpn">
-                    <property name="decimals">
-                     <number>5</number>
-                    </property>
-                    <property name="minimum">
-                     <double>0.000000000000000</double>
-                    </property>
-                    <property name="maximum">
-                     <double>0.990000000000000</double>
-                    </property>
-                    <property name="singleStep">
-                     <double>0.100000000000000</double>
-                    </property>
-                    <property name="value">
-                     <double>0.000000000000000</double>
-                    </property>
-                   </widget>
-                  </item>
-                 </layout>
-                </item>
-               </layout>
-              </widget>
-             </item>
-             <item>
-              <widget class="QGroupBox" name="resamplingGrpChk">
-               <property name="title">
-                <string>Resampling</string>
-               </property>
-               <property name="checkable">
-                <bool>true</bool>
-               </property>
-               <property name="checked">
-                <bool>false</bool>
-               </property>
-               <layout class="QFormLayout" name="formLayout_9">
-                <item row="2" column="1">
-                 <widget class="QCheckBox" name="alreadyDownsampleChk">
-                  <property name="text">
-                   <string>Already downsampled</string>
-                  </property>
-                  <property name="checked">
-                   <bool>true</bool>
-                  </property>
-                 </widget>
-                </item>
-                <item row="0" column="1">
-                 <widget class="QComboBox" name="resamplingCmb">
-                  <item>
-                   <property name="text">
-                    <string>2x2</string>
-                   </property>
-                  </item>
-                  <item>
-                   <property name="text">
-                    <string>4x4</string>
-                   </property>
-                  </item>
-                  <item>
-                   <property name="text">
-                    <string>8x8</string>
-                   </property>
-                  </item>
-                 </widget>
-                </item>
-                <item row="1" column="1">
-                 <widget class="QComboBox" name="resamplingModeCmb">
-                  <item>
-                   <property name="text">
-                    <string>Default</string>
-                   </property>
-                  </item>
-                  <item>
-                   <property name="text">
-                    <string>Nearest Neighboor</string>
-                   </property>
-                  </item>
-                  <item>
-                   <property name="text">
-                    <string>Pixel dots (4x4 and above)</string>
-                   </property>
-                  </item>
-                 </widget>
-                </item>
-               </layout>
-              </widget>
-             </item>
              <item>
               <spacer name="verticalSpacer_2">
                <property name="orientation">
@@ -788,6 +621,244 @@
                 </size>
                </property>
               </spacer>
+             </item>
+            </layout>
+           </widget>
+           <widget class="QWidget" name="tab_2">
+            <attribute name="title">
+             <string>Advanced</string>
+            </attribute>
+            <layout class="QVBoxLayout" name="verticalLayout_5">
+             <item>
+              <widget class="QScrollArea" name="scrollArea">
+               <property name="widgetResizable">
+                <bool>true</bool>
+               </property>
+               <widget class="QWidget" name="scrollAreaWidgetContents">
+                <property name="geometry">
+                 <rect>
+                  <x>0</x>
+                  <y>-168</y>
+                  <width>214</width>
+                  <height>452</height>
+                 </rect>
+                </property>
+                <layout class="QVBoxLayout" name="verticalLayout_8">
+                 <item>
+                  <widget class="QCheckBox" name="modularLossyChk">
+                   <property name="text">
+                    <string>Modular lossy</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QCheckBox" name="alphaPremulChk">
+                   <property name="text">
+                    <string>Alpha premultiply</string>
+                   </property>
+                   <property name="checked">
+                    <bool>false</bool>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <layout class="QFormLayout" name="formLayout_8">
+                   <item row="0" column="0">
+                    <widget class="QLabel" name="label_18">
+                     <property name="text">
+                      <string>Photon noise:</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="0" column="1">
+                    <widget class="QDoubleSpinBox" name="photonNoiseSpn">
+                     <property name="maximum">
+                      <double>999999.000000000000000</double>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </item>
+                 <item>
+                  <widget class="Line" name="line">
+                   <property name="orientation">
+                    <enum>Qt::Orientation::Horizontal</enum>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QGroupBox" name="autoCropChk">
+                   <property name="toolTip">
+                    <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Experimental: enables automatic frame cropping on animated input, set the color difference threshold with the spin box.&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;Note&lt;/span&gt;: enabling this will also explicitly enable JXL input coalescing. Also, this might won't work properly with frames with partial transparency. &lt;span style=&quot; font-weight:700;&quot;&gt;Might not work with complex project&lt;/span&gt; with layered and referenced frames -- try first on a small number of frames and/or low effort encoding before using it on a big project.&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;Only crop animated file&lt;/span&gt;: if enabled, this will only auto crop animated input file (eg. animated JXL and GIF), and leave normal frames uncropped.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+                   </property>
+                   <property name="title">
+                    <string>(Beta) Auto crop</string>
+                   </property>
+                   <property name="checkable">
+                    <bool>true</bool>
+                   </property>
+                   <property name="checked">
+                    <bool>false</bool>
+                   </property>
+                   <layout class="QVBoxLayout" name="verticalLayout_7">
+                    <item>
+                     <widget class="QCheckBox" name="onlyCropAnimatedChk">
+                      <property name="text">
+                       <string>Only crop animated</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <layout class="QFormLayout" name="formLayout_7">
+                      <item row="0" column="0">
+                       <widget class="QLabel" name="label_17">
+                        <property name="text">
+                         <string>Threshold</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item row="0" column="1">
+                       <widget class="QDoubleSpinBox" name="autoCropTreshSpn">
+                        <property name="decimals">
+                         <number>5</number>
+                        </property>
+                        <property name="minimum">
+                         <double>0.000000000000000</double>
+                        </property>
+                        <property name="maximum">
+                         <double>0.990000000000000</double>
+                        </property>
+                        <property name="singleStep">
+                         <double>0.100000000000000</double>
+                        </property>
+                        <property name="value">
+                         <double>0.000000000000000</double>
+                        </property>
+                       </widget>
+                      </item>
+                     </layout>
+                    </item>
+                   </layout>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QGroupBox" name="resamplingGrpChk">
+                   <property name="title">
+                    <string>Resampling</string>
+                   </property>
+                   <property name="checkable">
+                    <bool>true</bool>
+                   </property>
+                   <property name="checked">
+                    <bool>false</bool>
+                   </property>
+                   <layout class="QFormLayout" name="formLayout_9">
+                    <item row="2" column="1">
+                     <widget class="QCheckBox" name="alreadyDownsampleChk">
+                      <property name="text">
+                       <string>Already downsmpl</string>
+                      </property>
+                      <property name="checked">
+                       <bool>true</bool>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="0" column="1">
+                     <widget class="QComboBox" name="resamplingCmb">
+                      <item>
+                       <property name="text">
+                        <string>2x2</string>
+                       </property>
+                      </item>
+                      <item>
+                       <property name="text">
+                        <string>4x4</string>
+                       </property>
+                      </item>
+                      <item>
+                       <property name="text">
+                        <string>8x8</string>
+                       </property>
+                      </item>
+                     </widget>
+                    </item>
+                    <item row="1" column="1">
+                     <widget class="QComboBox" name="resamplingModeCmb">
+                      <item>
+                       <property name="text">
+                        <string>Default</string>
+                       </property>
+                      </item>
+                      <item>
+                       <property name="text">
+                        <string>Nearest Neighboor</string>
+                       </property>
+                      </item>
+                      <item>
+                       <property name="text">
+                        <string>Pixel dots (4x4 and above)</string>
+                       </property>
+                      </item>
+                     </widget>
+                    </item>
+                   </layout>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QGroupBox" name="cstbitGrpChk">
+                   <property name="toolTip">
+                    <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;This option only modifies JPEG XL basic info header for &lt;span style=&quot; font-style:italic;&quot;&gt;bits&lt;/span&gt; and &lt;span style=&quot; font-style:italic;&quot;&gt;exponent_bits&lt;/span&gt;. Input pixel &lt;span style=&quot; font-style:italic;&quot;&gt;data_type&lt;/span&gt; still determined by Bit depth selector on Basic tab.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+                   </property>
+                   <property name="title">
+                    <string>Custom encoder bits</string>
+                   </property>
+                   <property name="checkable">
+                    <bool>true</bool>
+                   </property>
+                   <property name="checked">
+                    <bool>false</bool>
+                   </property>
+                   <layout class="QFormLayout" name="formLayout_10">
+                    <item row="0" column="1">
+                     <widget class="QSpinBox" name="cstbitSpn">
+                      <property name="minimum">
+                       <number>1</number>
+                      </property>
+                      <property name="maximum">
+                       <number>32</number>
+                      </property>
+                      <property name="value">
+                       <number>8</number>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="0" column="0">
+                     <widget class="QLabel" name="label_19">
+                      <property name="text">
+                       <string>bits</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="1" column="1">
+                     <widget class="QSpinBox" name="cstexpbitSpn">
+                      <property name="maximum">
+                       <number>32</number>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="1" column="0">
+                     <widget class="QLabel" name="label_20">
+                      <property name="text">
+                       <string>exponent_bits</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </widget>
+                 </item>
+                </layout>
+               </widget>
+              </widget>
              </item>
             </layout>
            </widget>

@@ -214,6 +214,8 @@ struct EncodeParams {
     int loops{0};
     int resampleValue{0};
     int resampleMode{-1};
+    int customBitsNum{8};
+    int customExpBitsNum{0};
 
     EncodeColorSpace colorSpace{ENC_CS_SRGB};
     EncodeBitDepth bitDepth{ENC_BIT_8};
@@ -229,6 +231,7 @@ struct EncodeParams {
     bool chunkedFrame{false};
     bool enableResample{false};
     bool alreadyResampled{true};
+    bool customBits{false};
 
     QString outputFileName{};
 };
@@ -410,11 +413,11 @@ static constexpr char aboutData[] = {
 <b>JXL Frame Stitching</b>
 <br>Join multiple images together into a single, multilayered or animated JPEG XL image
 </p>
-<p>Kampidh 2024
+<p>Kampidh 2024 - 2026
 <br>Project github page: <a href="https://github.com/kampidh/JXL-Frame-Stitcher">https://github.com/kampidh/JXL-Frame-Stitcher</a></p>
 <p>3rd party libraries used:</p>
 <ul>
-<li>libjxl 0.11.0</li>
+<li>libjxl 0.12.0</li>
 <li>littlecms 2.16</li>
 </ul>
 </body></html>

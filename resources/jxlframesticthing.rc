@@ -17,12 +17,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Kampidh"
             VALUE "FileDescription", "JXL Frame Stitching"
-            VALUE "FileVersion", "0.3.2.0"
+            VALUE "FileVersion", "0.5.0.0"
             VALUE "LegalCopyright", "Copyright (C) 2024 Kampidh"
             VALUE "InternalName", "JXLFrameStitching"
             VALUE "OriginalFilename", "JXLFrameStitching.exe"
             VALUE "ProductName", "JXL Frame Stitching"
-            VALUE "ProductVersion", "0.3.2.0"
+            VALUE "ProductVersion", "0.5.0.0"
         END
     END
     BLOCK "VarFileInfo"

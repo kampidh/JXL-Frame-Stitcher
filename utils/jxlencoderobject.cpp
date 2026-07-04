@@ -237,45 +237,55 @@ bool JXLEncoderObject::doEncode()
         basicInfo.xsize = static_cast<uint32_t>(d->rootSize.width());
         basicInfo.ysize = static_cast<uint32_t>(d->rootSize.height());
     }
-    switch (pixelFormat.data_type) {
-    case JXL_TYPE_UINT8:
-        basicInfo.bits_per_sample = 8;
-        basicInfo.exponent_bits_per_sample = 0;
+    if (d->params.customBits) {
+        basicInfo.bits_per_sample = d->params.customBitsNum;
+        basicInfo.exponent_bits_per_sample = d->params.customExpBitsNum;
         if (d->params.alpha) {
-            basicInfo.alpha_bits = 8;
-            basicInfo.alpha_exponent_bits = 0;
+            basicInfo.alpha_bits = d->params.customBitsNum;
+            basicInfo.alpha_exponent_bits = d->params.customExpBitsNum;
             basicInfo.alpha_premultiplied = d->params.premulAlpha ? JXL_TRUE : JXL_FALSE;
         }
-        break;
-    case JXL_TYPE_UINT16:
-        basicInfo.bits_per_sample = 16;
-        basicInfo.exponent_bits_per_sample = 0;
-        if (d->params.alpha) {
-            basicInfo.alpha_bits = 16;
-            basicInfo.alpha_exponent_bits = 0;
-            basicInfo.alpha_premultiplied = d->params.premulAlpha ? JXL_TRUE : JXL_FALSE;
+    } else {
+        switch (pixelFormat.data_type) {
+        case JXL_TYPE_UINT8:
+            basicInfo.bits_per_sample = 8;
+            basicInfo.exponent_bits_per_sample = 0;
+            if (d->params.alpha) {
+                basicInfo.alpha_bits = 8;
+                basicInfo.alpha_exponent_bits = 0;
+                basicInfo.alpha_premultiplied = d->params.premulAlpha ? JXL_TRUE : JXL_FALSE;
+            }
+            break;
+        case JXL_TYPE_UINT16:
+            basicInfo.bits_per_sample = 16;
+            basicInfo.exponent_bits_per_sample = 0;
+            if (d->params.alpha) {
+                basicInfo.alpha_bits = 16;
+                basicInfo.alpha_exponent_bits = 0;
+                basicInfo.alpha_premultiplied = d->params.premulAlpha ? JXL_TRUE : JXL_FALSE;
+            }
+            break;
+        case JXL_TYPE_FLOAT16:
+            basicInfo.bits_per_sample = 16;
+            basicInfo.exponent_bits_per_sample = 5;
+            if (d->params.alpha) {
+                basicInfo.alpha_bits = 16;
+                basicInfo.alpha_exponent_bits = 5;
+                basicInfo.alpha_premultiplied = d->params.premulAlpha ? JXL_TRUE : JXL_FALSE;
+            }
+            break;
+        case JXL_TYPE_FLOAT:
+            basicInfo.bits_per_sample = 32;
+            basicInfo.exponent_bits_per_sample = 8;
+            if (d->params.alpha) {
+                basicInfo.alpha_bits = 32;
+                basicInfo.alpha_exponent_bits = 8;
+                basicInfo.alpha_premultiplied = d->params.premulAlpha ? JXL_TRUE : JXL_FALSE;
+            }
+            break;
+        default:
+            break;
         }
-        break;
-    case JXL_TYPE_FLOAT16:
-        basicInfo.bits_per_sample = 16;
-        basicInfo.exponent_bits_per_sample = 5;
-        if (d->params.alpha) {
-            basicInfo.alpha_bits = 16;
-            basicInfo.alpha_exponent_bits = 5;
-            basicInfo.alpha_premultiplied = d->params.premulAlpha ? JXL_TRUE : JXL_FALSE;
-        }
-        break;
-    case JXL_TYPE_FLOAT:
-        basicInfo.bits_per_sample = 32;
-        basicInfo.exponent_bits_per_sample = 8;
-        if (d->params.alpha) {
-            basicInfo.alpha_bits = 32;
-            basicInfo.alpha_exponent_bits = 8;
-            basicInfo.alpha_premultiplied = d->params.premulAlpha ? JXL_TRUE : JXL_FALSE;
-        }
-        break;
-    default:
-        break;
     }
     basicInfo.num_color_channels = 3;
     if (d->params.alpha) {

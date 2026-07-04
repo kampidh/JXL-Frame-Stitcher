@@ -981,6 +981,9 @@ void MainWindow::doEncode()
     params.alreadyResampled = ui->alreadyDownsampleChk->isChecked();
     params.resampleValue = ui->resamplingCmb->currentText().first(1).toInt();
     params.resampleMode = ui->resamplingModeCmb->currentIndex() - 1;
+    params.customBits = ui->cstbitGrpChk->isChecked();
+    params.customBitsNum = ui->cstbitSpn->value();
+    params.customExpBitsNum = ui->cstexpbitSpn->value();
 
     if (encEffort > 10) {
         const auto diag = QMessageBox::warning(this,
